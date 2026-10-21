@@ -101,6 +101,12 @@ export interface SentimentDTO {
   sources: SentimentSnapshot["sources"];
   keywords: string[];
   history: SentimentPoint[];
+  /** false = seeded sample data */
+  live: boolean;
+  /** time of the latest reading */
+  at: string;
+  /** 0–1, null for samples */
+  confidence: number | null;
 }
 
 /** Compact search record: [slug, title, dek(≤60), beat, publishedEpochMinutes] */
@@ -110,6 +116,7 @@ export type SearchRecord = [string, string, string, Beat, number];
 export interface Pulse {
   at: string;
   latest: Array<{ s: string; t: string; b: Beat; p: string }>;
-  quotes: Array<{ s: string; n: string; p: number; c: number; cur: string }>;
+  /** src: provider id for the credit line ("binance", "upbit", "ecb", …; "mock" for samples) */
+  quotes: Array<{ s: string; n: string; p: number; c: number; cur: string; src: string }>;
   senti: { score: number; ch: number } | null;
 }

@@ -70,6 +70,15 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
           <DocSection title="5. 독자 데이터를 학습에 쓰지 않습니다">
             <p>추천과 읽음 기록은 독자의 기기 안에서만 계산·저장됩니다. 서버에는 개인을 식별하지 않는 기사별 조회·완독 집계만 남습니다.</p>
           </DocSection>
+          <DocSection title="6. 센티먼트 지수의 AI 분류">
+            <p>
+              센티먼트 인덱스는 커뮤니티·소셜 게시물의 낙관·비관 분류에 AI(Anthropic Claude)를 씁니다. AI 분석에 동의하지 않은 출처는 규칙 기반으로만 분류합니다. 방법과 한계는{" "}
+              <Link href="/sentiment/method" className="text-ice hover:underline">
+                산출 방법
+              </Link>
+              에 공개합니다.
+            </p>
+          </DocSection>
         </DocPage>
       );
     case "corrections":

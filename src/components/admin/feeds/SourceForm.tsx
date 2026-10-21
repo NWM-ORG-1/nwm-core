@@ -10,6 +10,8 @@ import { Icon } from "@/components/ui/Icon";
 import { BEAT_ORDER } from "@/lib/beats";
 import { dateTimeKST } from "@/lib/format";
 import { SOURCE_KIND_LABEL, TRUST_TIER_LABEL } from "@/lib/labels";
+import type { AdapterMeta } from "@/ingest/registry";
+import { AdapterHelp, DryRun } from "./AdapterTools";
 import { saveSourceChecked } from "@/server/actions/feeds-extra";
 import type { ActionState } from "@/server/actions/result";
 import { field } from "./bits";
@@ -81,6 +83,10 @@ export function SourceForm(props: {
   experiments: Array<{ id: string; code: string; name: string }>;
   adapters: string[];
   takenSlugs: Array<{ id: string; slug: string; name: string }>;
+  /** collectors the worker knows (description, keys, config template) */
+  catalog?: AdapterMeta[];
+  /** env var name → set on the server (never the value) */
+  envPresent?: Record<string, boolean>;
 }) {
   const [nonce, setNonce] = useState(0);
   const reset = useCallback(() => setNonce((n) => n + 1), []);
@@ -92,12 +98,16 @@ function SourceFormInner({
   experiments,
   adapters,
   takenSlugs,
+  catalog = [],
+  envPresent = {},
   onHiddenAfterSave,
 }: {
   initial: SourceFormValues;
   experiments: Array<{ id: string; code: string; name: string }>;
   adapters: string[];
   takenSlugs: Array<{ id: string; slug: string; name: string }>;
+  catalog?: AdapterMeta[];
+  envPresent?: Record<string, boolean>;
   onHiddenAfterSave: () => void;
 }) {
   const router = useRouter();
@@ -126,6 +136,8 @@ function SourceFormInner({
   const [slug, setSlug] = useState(initial.slug);
   const [reviewed, setReviewed] = useState(initial.licReviewed);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [adapterKey, setAdapterKey] = useState(initial.adapter);
+  const adapterMeta = catalog.find((a) => a.key === adapterKey.trim());
   const configRef = useRef<HTMLTextAreaElement>(null);
   const slugRef = useRef<HTMLInputElement>(null);
 
@@ -285,14 +297,15 @@ function SourceFormInner({
               maxLength={60}
               list={fid("adapter-keys")}
               defaultValue={initial.adapter}
+              onChange={(e) => setAdapterKey(e.target.value)}
               aria-describedby={described("adapter")}
               className={cx(field.input, "font-mono text-[13px]")}
               autoComplete="off"
               spellCheck={false}
             />
             <datalist id={fid("adapter-keys")}>
-              {adapters.map((a) => (
-                <option key={a} value={a} />
+              {[...new Set([...catalog.map((a) => a.key), ...adapters])].map((a) => (
+                <option key={a} value={a} label={catalog.find((c) => c.key === a)?.label} />
               ))}
             </datalist>
           </Field>
@@ -343,6 +356,11 @@ function SourceFormInner({
               </div>
             </div>
           </Field>
+          {adapterMeta && (
+            <div className="sm:col-span-2">
+              <AdapterHelp meta={adapterMeta} envPresent={envPresent} configRef={configRef} onTemplate={() => setJsonError(null)} />
+            </div>
+          )}
           <Field
             label={LABELS.configJson}
             htmlFor={fid("configJson")}
@@ -350,7 +368,7 @@ function SourceFormInner({
             className="sm:col-span-2"
             help={
               <>
-                어댑터별 설정(JSON 객체). 예: <code className="font-mono text-fg-2">{'{ "corpCls": "Y", "pageSize": 100 }'}</code> · API 키 같은 비밀값은 넣지 말고 환경 변수 이름만 적으세요.
+                어댑터별 설정(JSON 객체). 저장할 때 어댑터 규칙으로 검사합니다. API 키 같은 비밀값은 넣지 말고 서버 환경 변수로 설정하세요.
               </>
             }
           >
@@ -367,6 +385,7 @@ function SourceFormInner({
               spellCheck={false}
               placeholder="{}"
             />
+            {initial.id && adapterMeta && <DryRun sourceId={initial.id} configRef={configRef} />}
           </Field>
         </div>
       </FormSection>

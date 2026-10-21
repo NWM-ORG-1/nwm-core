@@ -427,11 +427,19 @@ export async function getCorrectionsLog(): Promise<
 
 /* ─────────────────────────── market & sentiment ─────────────────────────── */
 
+/**
+ * Quotes the public may see: live rows only once any live quote exists (sample
+ * "mock" rows then drop out), and nothing older than four days (a stopped
+ * source must not leave a frozen number on the ticker).
+ */
+const visibleQuote = sql`(${marketQuotes.source} <> 'mock' or not exists (select 1 from market_quotes q where q.source <> 'mock'))
+  and (${marketQuotes.source} = 'mock' or ${marketQuotes.asOf} > now() - interval '4 days')`;
+
 export async function getQuotes(): Promise<QuoteDTO[]> {
   "use cache";
   cacheLife("river");
   cacheTag(T.quotes);
-  const rows = await db.select().from(marketQuotes).orderBy(asc(marketQuotes.sort));
+  const rows = await db.select().from(marketQuotes).where(visibleQuote).orderBy(asc(marketQuotes.sort));
   return rows.map((q) => ({
     symbol: q.symbol,
     name: q.name,
@@ -442,12 +450,25 @@ export async function getQuotes(): Promise<QuoteDTO[]> {
   }));
 }
 
+/**
+ * Published readings only: shadow rows (computed before launch) never reach the
+ * site, and once a live reading exists the seeded samples drop out.
+ */
+const visibleSentiment = sql`${sentimentSnapshots.shadow} = false
+  and (${sentimentSnapshots.isSample} = false or not exists (select 1 from sentiment_snapshots x where x.is_sample = false and x.shadow = false))`;
+
 async function sentimentScopes(keys?: string[]): Promise<SentimentDTO[]> {
-  const where = keys?.length ? inArray(sentimentSnapshots.scopeKey, keys) : undefined;
   const rows = await db
     .select()
     .from(sentimentSnapshots)
-    .where(where)
+    .where(
+      and(
+        visibleSentiment,
+        // live readings are hourly: three days covers the 24 h chart; seeded samples keep their own times
+        sql`(${sentimentSnapshots.isSample} or ${sentimentSnapshots.at} > now() - interval '3 days')`,
+        keys?.length ? inArray(sentimentSnapshots.scopeKey, keys) : undefined,
+      ),
+    )
     .orderBy(asc(sentimentSnapshots.scopeKey), asc(sentimentSnapshots.at));
   const byScope = new Map<string, (typeof rows)[number][]>();
   for (const r of rows) {
@@ -469,6 +490,9 @@ async function sentimentScopes(keys?: string[]): Promise<SentimentDTO[]> {
       sources: last.sources,
       keywords: last.keywords,
       history: list.slice(-24).map((p) => ({ at: p.at.toISOString(), score: p.score })),
+      live: !last.isSample,
+      at: last.at.toISOString(),
+      confidence: last.confidence,
     });
   }
   return out;
@@ -499,18 +523,18 @@ export async function getPulse(): Promise<Pulse> {
       .where(published)
       .orderBy(desc(articles.publishedAt))
       .limit(30),
-    db.select().from(marketQuotes).where(eq(marketQuotes.inTicker, true)).orderBy(asc(marketQuotes.sort)),
+    db.select().from(marketQuotes).where(and(eq(marketQuotes.inTicker, true), visibleQuote)).orderBy(asc(marketQuotes.sort)),
     db
       .select({ score: sentimentSnapshots.score, ch: sentimentSnapshots.change24h })
       .from(sentimentSnapshots)
-      .where(eq(sentimentSnapshots.scopeKey, "index"))
+      .where(and(eq(sentimentSnapshots.scopeKey, "index"), visibleSentiment))
       .orderBy(desc(sentimentSnapshots.at))
       .limit(1),
   ]);
   return {
     at: new Date().toISOString(), // inside 'use cache': frozen per entry
     latest: latest.map((r) => ({ s: r.s, t: r.t, b: r.b, p: r.p.toISOString() })),
-    quotes: quotes.map((q) => ({ s: q.symbol, n: q.name, p: q.price, c: q.changePct, cur: q.currency })),
+    quotes: quotes.map((q) => ({ s: q.symbol, n: q.name, p: q.price, c: q.changePct, cur: q.currency, src: q.source })),
     senti: index[0] ? { score: index[0].score, ch: index[0].ch } : null,
   };
 }

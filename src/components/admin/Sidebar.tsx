@@ -17,6 +17,8 @@ function navItems(shell: Awaited<ReturnType<typeof getAdminShell>>): AdminNavIte
     { href: "/admin/articles", label: "발행 기사", count: shell.counts.openRequests, alert: shell.counts.openRequests > 0 },
     { href: "/admin/stories", label: "스토리" },
     { href: "/admin/sources", label: "소스", count: shell.counts.sourceErrors, alert: shell.counts.sourceErrors > 0 },
+    { href: "/admin/ingest", label: "수집 현황" },
+    { href: "/admin/sentiment", label: "센티먼트" },
     { href: "/admin/experiments", label: "실험 (가설)" },
     { href: "/admin/activity", label: "활동 로그" },
     { href: "/admin/settings", label: "설정" },

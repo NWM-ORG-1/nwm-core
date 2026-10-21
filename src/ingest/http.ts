@@ -118,6 +118,8 @@ export interface HttpInit {
   validators?: Validators;
   userAgent?: string;
   fetchImpl?: typeof fetch;
+  /** tests only: allow localhost / private addresses */
+  allowPrivate?: boolean;
 }
 
 const MAX_VALIDATORS = 24;
@@ -137,6 +139,7 @@ export class Http {
   async request(url: string, opts: RequestOptions = {}): Promise<HttpResponse> {
     const u = new URL(url);
     if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error(`unsupported URL ${url}`);
+    if (!this.init.allowPrivate && isPrivateHost(u.hostname)) throw new Error(`내부망 주소는 수집할 수 없습니다 (${u.hostname})`);
     await this.init.limiter.wait(u.host, this.init.signal);
 
     const headers: Record<string, string> = {
@@ -193,6 +196,19 @@ export class Http {
       for (const k of keys.slice(0, keys.length - MAX_VALIDATORS)) delete this.validators[k];
     }
   }
+}
+
+/**
+ * Source URLs come from the newsroom: never let one point the collector at our
+ * own network (cloud metadata, Railway private services, localhost).
+ * Literal addresses and well-known internal names only — not a DNS-rebinding defence.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return true;
+  if (/^(0|127|10)\./.test(h) || /^169\.254\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return true;
+  if (h === "::1" || h === "::" || /^f[cd][0-9a-f]{2}:/.test(h) || /^fe80:/.test(h) || /^::ffff:/.test(h)) return true;
+  return false;
 }
 
 export function parseJson<T>(text: string, url: string): T {

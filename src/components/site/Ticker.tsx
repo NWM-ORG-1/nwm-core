@@ -38,11 +38,22 @@ const pauseStore = {
   },
 };
 
+/** Credit line at the end of the strip — data providers by their display names. */
+const PROVIDER: Record<string, string> = {
+  binance: "Binance",
+  upbit: "업비트",
+  bithumb: "빗썸",
+  ecb: "ECB",
+  koreaexim: "한국수출입은행",
+  treasury: "美 재무부",
+};
+
 export function Ticker() {
   const pulse = usePulse();
   const paused = useSyncExternalStore(pauseStore.subscribe, pauseStore.get, () => false);
   useEffect(() => startPulse(), []);
   const quotes = pulse?.quotes ?? [];
+  const credits = [...new Set(quotes.map((q) => PROVIDER[q.src]).filter(Boolean))];
   const toggle = () => pauseStore.set(!paused);
 
   return (
@@ -76,6 +87,12 @@ export function Ticker() {
                   <span className="ml-3 h-3 w-px bg-line-2" aria-hidden="true" />
                 </li>
               ))}
+              {credits.length > 0 && (
+                <li className="px-5 text-[11px] text-fg-4">
+                  시세 {credits.join(" · ")} · 지연될 수 있음
+                  <span className="ml-3 inline-block h-3 w-px bg-line-2 align-middle" aria-hidden="true" />
+                </li>
+              )}
             </ul>
           ))}
         </div>

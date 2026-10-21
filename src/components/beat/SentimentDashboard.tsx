@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSentimentDashboard } from "@/data/public";
 import { compactKo } from "@/lib/format";
 import { sentimentLabel } from "@/lib/labels";
@@ -16,7 +17,12 @@ export async function SentimentDashboard() {
         <h2 id="dash-h" className="text-[19px] font-bold tracking-[-0.02em] text-fg">
           NWM 센티먼트 인덱스
         </h2>
-        <p className="text-[12px] text-fg-4">X · Reddit · 텔레그램 · 국내 커뮤니티 언급 집계 · 1시간 단위</p>
+        <p className="text-[12px] text-fg-4">
+          {index.live ? "국내 커뮤니티 · 텔레그램 · X 게시물과 시장 지표 · 1시간 단위 · 베타" : "샘플 데이터 · 커뮤니티 언급 집계 예시"} ·{" "}
+          <Link href="/sentiment/method" className="underline decoration-line-2 underline-offset-2 hover:text-fg-2">
+            산출 방법
+          </Link>
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
@@ -39,7 +45,12 @@ export async function SentimentDashboard() {
           </div>
         </div>
         <div className="grid gap-4">
-          <ChartBlock title="인덱스 24시간 추이" unit="" points={index.history.map((p) => p.score)} source="NWM 센티먼트 집계 (샘플)" />
+          <ChartBlock
+            title="인덱스 24시간 추이"
+            unit=""
+            points={index.history.map((p) => p.score)}
+            source={index.live ? `NWM 센티먼트 인덱스 v1${index.confidence !== null ? ` · 신뢰도 ${Math.round(index.confidence * 100)}%` : ""}` : "NWM 센티먼트 집계 (샘플)"}
+          />
           <div className="panel p-4">
             <p className="kicker mb-3 text-fg-3">소스별 심리</p>
             <ul className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
@@ -107,6 +118,9 @@ export async function SentimentDashboard() {
           </tbody>
         </table>
       </div>
+      <p className="mt-3 text-[12px] leading-relaxed text-fg-4">
+        게시물 원문·작성자는 저장하거나 공개하지 않고 집계 수치만 씁니다. 글의 낙관·비관 분류에는 AI(Claude)와 규칙 기반 사전을 함께 씁니다. 이 지표는 투자 권유가 아닙니다.
+      </p>
     </section>
   );
 }

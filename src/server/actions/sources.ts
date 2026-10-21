@@ -5,6 +5,8 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { experiments, feedSources } from "@/db/schema";
+import { validateConfig } from "@/ingest/execute";
+import { getAdapter } from "@/ingest/registry";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { fail, ok, type ActionState } from "./result";
@@ -69,6 +71,12 @@ export async function saveSource(_prev: ActionState<{ id: string }>, form: FormD
       ...Object.fromEntries(form.entries()),
       beats: form.getAll("beats"),
     });
+    // a known adapter's config is checked against its schema; "manual" and unknown keys pass through
+    if (getAdapter(p.adapter)) {
+      const v = validateConfig(p.adapter, p.configJson);
+      // shown under the config field (form-kit splits issues on " · ")
+      if (!v.ok) return { ok: false, error: `configJson: 어댑터 규칙에 맞지 않습니다 — ${v.message.replaceAll(" · ", "; ")}`, code: "invalid", at: Date.now() };
+    }
     const values = {
       name: p.name,
       slug: p.slug,

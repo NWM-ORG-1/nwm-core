@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getSourceForEdit } from "@/data/admin";
 import { getSourceActivity, getSourceFormOptions } from "@/data/admin-feeds";
+import { getSourceHealth } from "@/data/admin-ingest";
+import { SourceHealthPanel } from "@/components/admin/ingest/SourceHealthPanel";
 import { btn, cx, LicenseIcons, PageHeader, TrustBadge } from "@/components/admin/ui";
 import { FormSkeleton } from "@/components/admin/feeds/bits";
 import { SourceActivityAside } from "@/components/admin/feeds/SourceAside";
@@ -37,8 +39,8 @@ export default function EditSourcePage({ params }: PageProps<"/admin/sources/[id
 async function Body({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const [{ source, experiments }, activity, options] = await Promise.all([getSourceForEdit(id), getSourceActivity(id), getSourceFormOptions()]);
-  if (!source || !activity) notFound();
+  const [{ source, experiments }, activity, options, health] = await Promise.all([getSourceForEdit(id), getSourceActivity(id), getSourceFormOptions(), getSourceHealth(id)]);
+  if (!source || !activity || !health) notFound();
   const initial = toSourceFormValues(source);
 
   return (
@@ -80,11 +82,16 @@ async function Body({ params }: { params: Promise<{ id: string }> }) {
             experiments={experiments}
             adapters={options.adapters}
             takenSlugs={options.slugs}
+            catalog={options.catalog}
+            envPresent={options.envPresent}
           />
         </div>
         <aside>
           <div className="xl:sticky xl:top-5">
-            <SourceActivityAside id={source.id} name={source.name} slug={source.slug} activity={activity} />
+            <div className="space-y-4">
+              <SourceHealthPanel id={source.id} health={health} />
+              <SourceActivityAside id={source.id} name={source.name} slug={source.slug} activity={activity} />
+            </div>
           </div>
         </aside>
       </div>

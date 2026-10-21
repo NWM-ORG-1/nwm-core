@@ -48,3 +48,11 @@ describe("text helpers", () => {
     assert.equal(clip("short", 12), "short");
   });
 });
+
+describe("isPrivateHost", () => {
+  it("blocks our own network, allows public hosts", async () => {
+    const { isPrivateHost } = await import("@/ingest/http");
+    for (const h of ["localhost", "127.0.0.1", "10.0.0.5", "169.254.169.254", "192.168.1.1", "172.20.0.1", "nwm-web.railway.internal", "[::1]", "fd12:3456::1"]) assert.equal(isPrivateHost(h), true, h);
+    for (const h of ["www.sec.gov", "api.upbit.com", "8.8.8.8", "172.32.0.1"]) assert.equal(isPrivateHost(h), false, h);
+  });
+});

@@ -14,6 +14,8 @@ export interface JobResult {
   note?: string;
   /** cache tags to refresh on the site */
   tags?: string[];
+  /** stored with the run (spend, counts) */
+  meta?: Record<string, unknown>;
 }
 
 export interface Job {
@@ -79,7 +81,7 @@ export class JobScheduler {
           seen: r.seen ?? 0,
           inserted: r.inserted ?? 0,
           updated: r.updated ?? 0,
-          meta: r.note ? { note: r.note } : {},
+          meta: { ...(r.note ? { note: r.note } : {}), ...r.meta },
         });
         if (r.tags?.length) this.onTags(r.tags);
         if (r.note) this.log(`[job ${j.name}] ${r.note}`);

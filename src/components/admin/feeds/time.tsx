@@ -45,6 +45,23 @@ export function Ago({ iso, className }: { iso: string | null; className?: string
   );
 }
 
+/** "4분 후" for a time ahead, "곧" once it has passed (the worker is about to pick it up). */
+export function Until({ iso, className }: { iso: string | null; className?: string }) {
+  const t = useNow();
+  if (!iso) return <span className={className}>곧</span>;
+  const ms = Date.parse(iso) - t;
+  let label = clockKST(iso);
+  if (t) {
+    const min = Math.round(ms / 60_000);
+    label = ms <= 30_000 ? "곧" : min < 60 ? `${Math.max(1, min)}분 후` : min < 48 * 60 ? `${Math.round(min / 60)}시간 후` : `${Math.round(min / 1440)}일 후`;
+  }
+  return (
+    <time dateTime={iso} title={dateTimeKST(iso)} className={className} suppressHydrationWarning>
+      {label}
+    </time>
+  );
+}
+
 /** "14:05 · 3분 전" for today (KST); "10.19 14:05 · 2일 전" otherwise. */
 export function Stamp({ iso, inline = false }: { iso: string; inline?: boolean }) {
   const t = useNow();

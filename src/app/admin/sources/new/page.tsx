@@ -42,7 +42,7 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
   return (
     <div className="grid gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 max-w-4xl">
-        <SourceForm initial={initial} experiments={experiments} adapters={options.adapters} takenSlugs={options.slugs} />
+        <SourceForm initial={initial} experiments={experiments} adapters={options.adapters} takenSlugs={options.slugs} catalog={options.catalog} envPresent={options.envPresent} />
       </div>
       <aside className="order-first xl:order-none">
         <div className="xl:sticky xl:top-5">
