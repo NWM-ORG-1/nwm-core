@@ -33,10 +33,11 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@",
   textNodeName: "#text",
-  // keep CDATA as text, never evaluate entities beyond XML's own
   cdataPropName: false,
-  processEntities: true,
-  htmlEntities: true,
+  // entities are decoded by text() below: DOCTYPE entities are never expanded
+  // (no billion-laughs) and feeds full of escaped HTML hit no expansion limit
+  processEntities: false,
+  htmlEntities: false,
   trimValues: true,
   parseTagValue: false,
   parseAttributeValue: false,
@@ -47,7 +48,8 @@ type Node = Record<string, unknown> | string | undefined;
 
 function text(n: unknown): string {
   if (n == null) return "";
-  if (typeof n === "string" || typeof n === "number" || typeof n === "boolean") return String(n);
+  if (typeof n === "string") return decodeEntities(n);
+  if (typeof n === "number" || typeof n === "boolean") return String(n);
   if (Array.isArray(n)) return n.map(text).filter(Boolean).join(", ");
   if (typeof n === "object") {
     const o = n as Record<string, unknown>;

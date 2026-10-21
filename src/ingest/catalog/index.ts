@@ -59,6 +59,9 @@ const DEFAULT_SEC_WATCH = [
   "COUPANG",
 ];
 
+/** DC rows: notices, surveys and ads carry a non-numeric number cell */
+const DC_SKIP = { sel: "td.gall_num", regex: "\\D" };
+
 const DC_FIELDS = {
   id: { attr: "data-no" },
   title: { sel: "td.gall_tit a" },
@@ -127,9 +130,8 @@ export const CATALOG: CatalogSource[] = [
     lang: "ko",
     trustTier: 1,
     pollIntervalSec: 900,
-    config: { method: "POST", maxItems: 30, boost: ["수출입", "수출", "무역수지", "반도체"] },
-    status: "paused",
-    note: "게시판의 RSS 버튼이 POST 폼이라 주소를 확인 중입니다. ‘테스트 실행’으로 확인 후 활성화하세요. (월간 수출입동향은 매월 1일)",
+    config: { method: "POST", maxItems: 30, boost: ["수출입", "수출", "무역수지", "반도체"] }, // probe ✓ (POST)
+    note: "게시판의 RSS 버튼이 POST 폼이라 POST로 받습니다. 월간 수출입동향은 매월 1일 09시. 관세청 10일 잠정치는 RSS가 없어 언론 보도·관세청 누리집으로 확인합니다.",
     license: { commercialOk: true, verbatimOk: true, attribution: "출처: 산업통상부" },
   },
   {
@@ -526,7 +528,7 @@ export const CATALOG: CatalogSource[] = [
     lang: "ko",
     trustTier: 4,
     pollIntervalSec: 180,
-    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
+    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, skipIf: DC_SKIP, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
     note: "제목·조회·댓글 수만 씁니다. 협의 범위에 AI 분석이 포함되면 llmConsent=true.",
     license: COMMUNITY_LICENSE,
   },
@@ -539,7 +541,7 @@ export const CATALOG: CatalogSource[] = [
     lang: "ko",
     trustTier: 4,
     pollIntervalSec: 180,
-    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
+    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, skipIf: DC_SKIP, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
     license: COMMUNITY_LICENSE,
   },
   {
@@ -551,7 +553,7 @@ export const CATALOG: CatalogSource[] = [
     lang: "ko",
     trustTier: 4,
     pollIntervalSec: 180,
-    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
+    config: { row: "tr.ub-content.us-post", fields: DC_FIELDS, skipIf: DC_SKIP, output: "posts", llmConsent: false, maxRows: 60, respectRobots: true },
     status: "paused",
     note: "robots.txt가 주식 갤러리(stock_new·stock_new2) 수집을 막습니다. 협의가 있으면 respectRobots=false와 robotsOverride(근거)를 기록하세요.",
     license: COMMUNITY_LICENSE,
@@ -588,7 +590,7 @@ export const CATALOG: CatalogSource[] = [
     slug: "ppomppu-stock",
     name: "뽐뿌 증권포럼",
     adapter: "html.list",
-    url: "https://www.ppomppu.co.kr/zboard/zboard.php?id=stock",
+    url: "https://www.ppomppu.co.kr/zboard/zboard.php?id=stock", // probe ✓ (cookie check) robots: allowed
     beats: ["sentiment", "economy"],
     lang: "ko",
     trustTier: 4,
@@ -599,20 +601,20 @@ export const CATALOG: CatalogSource[] = [
         id: { sel: "td.baseList-numb" },
         title: { sel: "a.baseList-title" },
         link: { sel: "a.baseList-title", attr: "href" },
-        time: { sel: "td[title]", attr: "title" },
+        time: { sel: "time.baseList-time", attr: "title" },
         author: { sel: ".baseList-name" },
         views: { sel: "td.baseList-views" },
-        likes: { sel: "td.baseList-rec" },
+        likes: { sel: "td.baseList-rec", regex: "^(\\d+)" },
         comments: { sel: ".baseList-c", regex: "(\\d+)" },
       },
+      skipIf: { sel: "td.baseList-numb", regex: "\\D" },
       output: "posts",
       llmConsent: false,
       cookieCheck: true,
       maxRows: 40,
       respectRobots: true,
     },
-    status: "paused",
-    note: "첫 방문에 쿠키 확인 리다이렉트가 있어 cookieCheck를 켭니다. 행 선택자는 ‘테스트 실행’으로 확인한 뒤 활성화하세요.",
+    note: "첫 방문에 쿠키를 심고 같은 주소로 되돌려 보내는 게시판이라 cookieCheck를 켭니다.",
     license: COMMUNITY_LICENSE,
   },
   {

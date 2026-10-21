@@ -36,7 +36,8 @@ export function guessBeat(title: string, summary: string, sourceBeats: readonly 
  * names match case-insensitively. Cashtags ($XYZ) always count.
  */
 const ASSETS: Array<{ id: string; tickers?: RegExp; names?: RegExp }> = [
-  { id: "BTC", tickers: /\bBTC\b/, names: /비트코인|비코(?!인)|빗코|bitcoin/i },
+  // "비트" alone is community shorthand for bitcoin; "비트겟", "비트맵" are other words
+  { id: "BTC", tickers: /\bBTC\b/, names: /비트코인|(?<![0-9A-Za-z가-힣])비트(?![가-힣])|비코(?!인)|빗코|bitcoin/i },
   { id: "ETH", tickers: /\bETH\b(?! ?Z[uü]rich)/, names: /이더리움|이더(?!넷|리얼)|ethereum/i },
   { id: "SOL", tickers: /\bSOL\b/, names: /솔라나|solana/i },
   { id: "XRP", tickers: /\bXRP\b/, names: /리플|엑스알피/ },

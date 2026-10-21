@@ -1,0 +1,4 @@
+{"status":"000","message":"정상","page_no":1,"page_count":100,"total_count":3,"total_page":1,"list":[
+{"corp_code":"00126380","corp_name":"삼성전자","stock_code":"005930","corp_cls":"Y","report_nm":"연결재무제표기준영업(잠정)실적(공정공시)","rcept_no":"20261021800123","flr_nm":"삼성전자","rcept_dt":"20261021","rm":"유"},
+{"corp_code":"00999999","corp_name":"가나다바이오","stock_code":"123456","corp_cls":"K","report_nm":"주요사항보고서(유상증자결정)","rcept_no":"20261021000456","flr_nm":"가나다바이오","rcept_dt":"20261021","rm":""},
+{"corp_code":"00888888","corp_name":"라마바홀딩스","stock_code":"","corp_cls":"E","report_nm":"임원ㆍ주요주주특정증권등소유상황보고서","rcept_no":"20261021000789","flr_nm":"홍길동","rcept_dt":"20261021","rm":""}]}

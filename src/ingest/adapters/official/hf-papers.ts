@@ -15,6 +15,7 @@ interface HfPaper {
     ai_summary?: string;
     upvotes?: number;
     publishedAt?: string;
+    submittedOnDailyAt?: string;
     authors?: Array<{ name?: string }>;
     githubRepo?: string;
   };
@@ -52,7 +53,8 @@ export const hfPapersAdapter = defineAdapter({
         title,
         summary: clip((p.ai_summary || p.summary || "").replace(/\s+/g, " "), 700),
         lang: "en",
-        publishedAt: parseDate(row.publishedAt ?? p.publishedAt) ?? null,
+        // the day it was featured, so the inbox shows it as fresh
+        publishedAt: parseDate(p.submittedOnDailyAt ?? row.publishedAt ?? p.publishedAt) ?? null,
         beatGuess: "ai",
         weight: Math.min(1, 0.3 + Math.log10(1 + upvotes) / 3),
         payload: {

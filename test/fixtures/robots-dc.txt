@@ -1,0 +1,17 @@
+# ----- AI 학습 크롤러 차단 -----
+User-agent: GPTBot
+Disallow: /
+User-agent: ClaudeBot
+Disallow: /
+# ----- 그 외 모든 봇 (검색봇 + AI 검색봇 포함) -----
+User-agent: *
+Allow: /
+# 시스템 경로
+Disallow: /kcaptcha/image_v3/
+# stock_new
+Disallow: /board/lists/?id=stock_new
+Disallow: /board/view/?id=stock_new
+# stock_new2
+Disallow: /board/lists/?id=stock_new2
+Disallow: /board/view/?id=stock_new2
+Disallow: /mgallery/board/lists/?id=rezero

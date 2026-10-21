@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/vercel/next.js/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/vercel/next.js/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/vercel/next.js/releases.atom"/>
+  <title>Release notes from next.js</title>
+  <updated>2026-10-20T23:23:05Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/70107786/v16.5.0-canary.21</id>
+    <updated>2026-10-20T23:51:32Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/vercel/next.js/releases/tag/v16.5.0-canary.21"/>
+    <title>v16.5.0-canary.21</title>
+    <content type="html">&lt;h3&gt;Core Changes&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Defer app router HMR refresh until the router is initialized: &lt;a class=&quot;issue-link js-issue-link&quot; href=&quot;https://github.com/vercel/next.js/pull/100113&quot;&gt;#100113&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>next-js-bot[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/3491438?s=60&amp;v=4"/>
+  </entry>
+</feed>

@@ -1,0 +1,10 @@
+User-agent: *
+Allow:/service/board/
+Disallow:/service/group/
+Disallow:/service/board/sold/
+Disallow:/service/search*
+Disallow: /*?*
+User-agent: Daumoa
+Allow:/service/board/sold/
+User-agent: anthropic-ai
+Disallow: /

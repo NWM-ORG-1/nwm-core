@@ -11,7 +11,7 @@
     "worker:build": "esbuild src/worker/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/worker.cjs --log-level=warning",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint",
-    "test:unit": "tsx --test \"test/unit/**/*.test.ts\"",
+    "test:unit": "tsx --test \"test/unit/*.test.ts\" \"test/integration/*.test.ts\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx src/db/seed/index.ts",
@@ -26,6 +26,7 @@
     "verify": "npm run typecheck && npm run lint && npm run build && npm run audit:build && npm run test:e2e"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "drizzle-orm": "^0.45.4",
     "fast-xml-parser": "4.5.7",
     "geist": "^1.8.1",

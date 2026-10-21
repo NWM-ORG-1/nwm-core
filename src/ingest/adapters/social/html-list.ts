@@ -39,6 +39,10 @@ const config = z.object({
   }),
   /** rows matching this selector are skipped (notices, ads) */
   skip: z.string().max(200).optional(),
+  /** rows whose field text matches are skipped, e.g. a number cell reading "공지" */
+  skipIf: z.object({ sel: z.string().max(200), regex: z.string().max(200) }).optional(),
+  /** pinned and old rows: drop anything older than this (rows without a time are kept) */
+  maxAgeDays: z.number().min(0.1).max(60).default(3),
   /** posts → sentiment (social_posts), items → newsroom inbox */
   output: z.enum(["posts", "items"]).default("posts"),
   /** titles may be scored by the LLM; set false when the agreement does not cover AI analysis */
@@ -102,8 +106,10 @@ export const htmlListAdapter = defineAdapter({
     }
 
     const html = c.cookieCheck ? await fetchWithCookieCheck(ctx.http, url, c.encoding, headers) : await ctx.http.text(url, { encoding: c.encoding, timeoutMs: 25_000, headers });
-    const rows = readRows(html, url, c);
-    if (!rows.length) throw new Error(`목록에서 행을 찾지 못했습니다 (row: ${c.row}) — 페이지 구조가 바뀌었을 수 있습니다`);
+    const all = readRows(html, url, c, ctx.now);
+    if (!all.length) throw new Error(`목록에서 행을 찾지 못했습니다 (row: ${c.row}) — ${describePage(html)}`);
+    const cutoff = ctx.now.getTime() - c.maxAgeDays * 86_400_000;
+    const rows = all.filter((r) => !r.time || r.time.getTime() >= cutoff);
 
     const seenIds = new Set((ctx.state.seen as string[] | undefined) ?? []);
     const state = { robots: ctx.state.robots, seen: [...new Set([...rows.map((r) => r.id), ...seenIds])].slice(0, 600) };
@@ -142,14 +148,21 @@ interface Row {
 }
 
 /** Exported for fixtures: list HTML → rows. */
-export function readRows(html: string, baseUrl: string, c: Pick<Cfg, "row" | "fields" | "skip" | "maxRows" | "include" | "exclude" | "stripTitle">, now = new Date()): Row[] {
+export function readRows(
+  html: string,
+  baseUrl: string,
+  c: Pick<Cfg, "row" | "fields" | "skip" | "maxRows" | "include" | "exclude" | "stripTitle"> & { skipIf?: Cfg["skipIf"] },
+  now = new Date(),
+): Row[] {
   const root = parse(html, { blockTextElements: { script: false, style: false, noscript: false } });
   const strip = c.stripTitle ? new RegExp(c.stripTitle, "g") : null;
+  const skipIf = c.skipIf ? { sel: c.skipIf.sel, re: new RegExp(c.skipIf.regex) } : null;
   const out: Row[] = [];
   const ids = new Set<string>();
   for (const el of root.querySelectorAll(c.row)) {
     if (out.length >= c.maxRows) break;
-    if (c.skip && (el.matches?.(c.skip) || el.querySelector(c.skip))) continue;
+    if (c.skip && el.querySelector(c.skip)) continue;
+    if (skipIf && skipIf.re.test(read(el, { sel: skipIf.sel }))) continue;
     const id = read(el, c.fields.id);
     let title = read(el, c.fields.title);
     if (!id || !title || ids.has(id)) continue;
@@ -182,6 +195,14 @@ function read(row: HTMLElement, f: z.infer<typeof field>): string {
     v = m ? (m[1] ?? m[0]) : "";
   }
   return v.trim();
+}
+
+/** What came back instead of a list: the page title and the start of its text. */
+function describePage(html: string): string {
+  const root = parse(html, { blockTextElements: { script: false, style: false, noscript: false } });
+  const title = oneLine(root.querySelector("title")?.textContent ?? "");
+  const body = oneLine(root.querySelector("body")?.textContent ?? root.textContent).slice(0, 140);
+  return `페이지 제목 “${title || "(없음)"}”, 본문 “${body || "(비어 있음)"}” (${html.length}자). 차단 페이지이거나 구조가 바뀌었을 수 있습니다`;
 }
 
 function decodeText(s: string): string {
