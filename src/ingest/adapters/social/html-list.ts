@@ -153,7 +153,12 @@ interface Row {
  * keeping them leaves rows in the tree, possibly nested inside one another.
  */
 function parseHtml(html: string): HTMLElement {
-  return parse(html, { blockTextElements: { script: false, style: false, noscript: false }, parseNoneClosedTags: true });
+  // a script/style block ends at the exact text `</name>` as its opening tag spelled the name,
+  // so `<SCRIPT>…</script>` or `</script >` would swallow the rest of the page
+  const tidy = html.replace(/<(\/?)(script|style|noscript)\b([^>]*)>/gi, (_, slash: string, name: string, rest: string) =>
+    slash ? `</${name.toLowerCase()}>` : `<${name.toLowerCase()}${rest}>`,
+  );
+  return parse(tidy, { blockTextElements: { script: false, style: false, noscript: false }, parseNoneClosedTags: true });
 }
 
 /** Exported for fixtures: list HTML → rows. */

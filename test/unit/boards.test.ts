@@ -86,6 +86,16 @@ describe("board markup with unclosed tags", () => {
     );
     assert.equal(rows[1].link, "https://board.example/p/2");
   });
+
+  it("does not let a script block spelled in another case swallow the list", () => {
+    // no `</SCRIPT>` follows, so a parser looking for one reads the rest of the page as script
+    const page = html.replace("<body>", `<body><SCRIPT type="text/javascript">var a = "<div>";</script >`);
+    const rows = readRows(page, "https://board.example/list", c, NOW);
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      ["1", "2", "3"],
+    );
+  });
 });
 
 describe("telegram t.me/s", () => {
