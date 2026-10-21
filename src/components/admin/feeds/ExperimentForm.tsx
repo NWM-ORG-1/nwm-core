@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useCallback, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useCallback, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { btn, cx } from "@/components/admin/ui";
 import { Icon } from "@/components/ui/Icon";
-import { saveExperiment } from "@/server/actions/sources";
+import { saveExperimentChecked } from "@/server/actions/feeds-extra";
 import type { ActionState } from "@/server/actions/result";
 import { field } from "./bits";
 import { ErrorSummary, Field, FormSection, issuesFrom } from "./form-kit";
@@ -58,7 +58,7 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
   const router = useRouter();
   const saved = useRef(false);
   const [state, action, pending] = useActionState(async (prev: ActionState<{ id: string }>, fd: FormData) => {
-    const res = await saveExperiment(prev, fd);
+    const res = await saveExperimentChecked(prev, fd);
     if (res?.ok) {
       saved.current = true;
       router.push("/admin/experiments");
@@ -83,10 +83,14 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
   const codeRef = useRef<HTMLInputElement>(null);
 
   const issues = issuesFrom(state);
-  const codeTaken = others.some((o) => o.code === code.trim().toUpperCase());
+  const codeOwner = others.find((o) => o.code.toUpperCase() === code.trim().toUpperCase());
+  const codeTaken = codeOwner != null;
   const sharing = others.filter((o) => o.colorSlot === slot && o.status !== "concluded");
+  // Unique per instance: Activity keeps other forms (e.g. a source form) in the DOM.
+  const uid = useId();
+  const fid = (k: string) => `${uid}-${k}`;
   const err = (k: string) => issues[k];
-  const described = (k: string) => (err(k) ? `${k}-error` : `${k}-help`);
+  const described = (k: string) => (err(k) ? `${fid(k)}-error` : `${fid(k)}-help`);
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -109,9 +113,9 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
         lead="검증할 수 있는 문장으로 씁니다. 무엇을 바꾸면(소스·작성 방식) 어떤 지표가 얼마나 움직일지 적어 두면 종료할 때 판단이 쉬워집니다."
       >
         <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
-          <Field label={LABELS.code} htmlFor="code" required error={codeTaken ? `${code.toUpperCase()}는 이미 쓰고 있는 코드입니다` : err("code")} help="H1, H2 … 형식">
+          <Field label={LABELS.code} htmlFor={fid("code")} required error={codeOwner ? `이미 ‘${codeOwner.name}’ 가설이 쓰는 코드입니다` : err("code")} help="H1, H2 … 형식">
             <input
-              id="code"
+              id={fid("code")}
               ref={codeRef}
               name="code"
               required
@@ -121,15 +125,15 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ""))}
               aria-invalid={codeTaken || Boolean(err("code"))}
-              aria-describedby={codeTaken || err("code") ? "code-error" : "code-help"}
+              aria-describedby={codeTaken || err("code") ? `${fid("code")}-error` : `${fid("code")}-help`}
               className={cx(field.input, "font-mono font-bold uppercase")}
               autoComplete="off"
               spellCheck={false}
             />
           </Field>
-          <Field label={LABELS.name} htmlFor="name" required error={err("name")} help="목록과 차트 범례에 표시됩니다. 짧게.">
+          <Field label={LABELS.name} htmlFor={fid("name")} required error={err("name")} help="목록과 차트 범례에 표시됩니다. 짧게.">
             <input
-              id="name"
+              id={fid("name")}
               name="name"
               required
               minLength={2}
@@ -144,7 +148,7 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
           </Field>
           <Field
             label={LABELS.hypothesis}
-            htmlFor="hypothesis"
+            htmlFor={fid("hypothesis")}
             required
             error={err("hypothesis")}
             className="sm:col-span-2"
@@ -156,7 +160,7 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
             }
           >
             <textarea
-              id="hypothesis"
+              id={fid("hypothesis")}
               name="hypothesis"
               required
               minLength={5}
@@ -174,9 +178,9 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
 
       <FormSection kicker="02 · MEASURE" title="측정 · 상태" lead="주 지표 하나로 성패를 판단합니다. 나머지 지표는 부작용(정정 증가 등)을 감시하는 용도입니다.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={LABELS.primaryMetric} htmlFor="primaryMetric" required error={err("primaryMetric")} help={`${PRIMARY_METRIC[metric].explain} · ${PRIMARY_METRIC[metric].better === "higher" ? "높을수록 좋음" : "낮을수록 좋음"}`}>
+          <Field label={LABELS.primaryMetric} htmlFor={fid("primaryMetric")} required error={err("primaryMetric")} help={`${PRIMARY_METRIC[metric].explain} · ${PRIMARY_METRIC[metric].better === "higher" ? "높을수록 좋음" : "낮을수록 좋음"}`}>
             <select
-              id="primaryMetric"
+              id={fid("primaryMetric")}
               name="primaryMetric"
               value={metric}
               onChange={(e) => setMetric(e.target.value as PrimaryMetric)}
@@ -190,9 +194,9 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
               ))}
             </select>
           </Field>
-          <Field label={LABELS.status} htmlFor="status" required error={err("status")} help={STATUS_HELP[status]}>
+          <Field label={LABELS.status} htmlFor={fid("status")} required error={err("status")} help={STATUS_HELP[status]}>
             <select
-              id="status"
+              id={fid("status")}
               name="status"
               value={status}
               onChange={(e) => setStatus(e.target.value as ExperimentStatus)}
@@ -227,7 +231,7 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
                     />
                     <span className="min-w-0">
                       <span className="block text-[13px] font-semibold text-fg">슬롯 {n}</span>
-                      <span className="block truncate text-[11.5px] text-fg-3">{users.length ? `사용 중: ${users.map((u) => u.code).join(", ")}` : "비어 있음"}</span>
+                      <span className="block truncate text-[11.5px] text-fg-3">{users.length ? `사용 중: ${users.map((u) => u.code).join(", ")}` : slot === n ? "이 가설만 사용" : "비어 있음"}</span>
                     </span>
                   </label>
                 );
@@ -236,7 +240,7 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
             {sharing.length > 0 ? (
               <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-relaxed text-warn" role="note">
                 <Icon name="alert" size={13} className="mt-[3px] shrink-0" />
-                {sharing.map((s) => s.code).join(", ")}와 같은 색입니다. 비교 차트에서는 코드 표기로 구분되지만, 진행 중인 가설끼리는 겹치지 않게 고르는 편이 좋습니다.
+                같은 색을 쓰는 가설: {sharing.map((s) => s.code).join(", ")}. 비교 차트에서는 코드 표기로 구분되지만, 진행 중인 가설끼리는 겹치지 않게 고르는 편이 좋습니다.
               </p>
             ) : (
               <p className={field.help}>색은 차트·칩에서 이 가설을 구분하는 표식입니다. 항상 코드와 함께 표시됩니다.</p>
@@ -246,9 +250,9 @@ function ExperimentFormInner({ initial, others, onHiddenAfterSave }: { initial: 
       </FormSection>
 
       <FormSection kicker="03 · NOTES" title="메모" lead="중간 관찰, 소스 교체 이력, 종료 판단 근거 등을 남깁니다. 편집국 내부용입니다.">
-        <Field label={LABELS.notes} htmlFor="notes" error={err("notes")} help="최대 2,000자">
+        <Field label={LABELS.notes} htmlFor={fid("notes")} error={err("notes")} help="최대 2,000자">
           <textarea
-            id="notes"
+            id={fid("notes")}
             name="notes"
             rows={5}
             maxLength={2000}

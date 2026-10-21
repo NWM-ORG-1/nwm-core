@@ -32,8 +32,11 @@ export async function updateStory(input: {
       })
       .parse(input);
 
-    const prev = await db.query.stories.findFirst({ where: eq(stories.id, p.id), columns: { title: true, summary: true, status: true } });
+    const prev = await db.query.stories.findFirst({ where: eq(stories.id, p.id), columns: { slug: true, title: true, summary: true, status: true } });
     if (!prev) throw new NewsroomError("스토리를 찾을 수 없습니다.", "not_found");
+    if (prev.title === p.title && prev.summary === p.summary && prev.status === p.status) {
+      return ok("변경 사항이 없습니다.", { id: p.id, slug: prev.slug });
+    }
 
     const [s] = await db
       .update(stories)
@@ -53,7 +56,8 @@ export async function updateStory(input: {
       summary: `스토리 수정: ${p.title}${changes.length ? ` (${changes.join(", ")})` : ""}`,
     });
 
-    invalidateFromAction([T.feed, T.story(s.id)]);
+    // Editor pages print story titles on their cards.
+    invalidateFromAction([T.feed, T.story(s.id), T.editors]);
     refresh();
     return ok("스토리를 저장했습니다.", s);
   } catch (e) {

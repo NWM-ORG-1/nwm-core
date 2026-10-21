@@ -3,17 +3,23 @@ import { getDashboard } from "@/data/admin";
 import { getDashboardClock, getRequestArticleIds } from "@/data/admin-dashboard";
 import { Icon } from "@/components/ui/Icon";
 import { LocalTime } from "@/components/ui/LocalTime";
-import { clockKST, compactKo, dateKST } from "@/lib/format";
+import { clockKST, compactKo, dateKST, ymdKST } from "@/lib/format";
 import { DATA_TEMPLATES, type DataTemplateId } from "@/server/generator/data-templates";
 import { Badge, Card, cx } from "../ui";
 import { AiMixBar, ExperimentFunnels, Throughput, throughputSummary } from "./charts";
 import { DataAutoPanel, type DataTemplateOption } from "./DashboardClient";
-import { activityHref, activityKind } from "./labels";
+import { activityHref, activityKind, presentSummary } from "./labels";
 import { CardTitle, Kpi, SubHead } from "./parts";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboard>>;
 
 const DAY = 86_400_000;
+
+/** Calendar days (KST) from `iso` to `nowMs` — 언론중재법 deadlines count days from receipt, not 24h periods. */
+function kstDaysSince(iso: string, nowMs: number) {
+  const day = (d: Date) => Date.parse(`${ymdKST(d)}T00:00:00Z`);
+  return Math.max(0, Math.round((day(new Date(nowMs)) - day(new Date(iso))) / DAY));
+}
 
 export async function DashboardBody() {
   const [d, clock] = await Promise.all([getDashboard(), getDashboardClock()]);
@@ -72,6 +78,7 @@ export async function DashboardBody() {
           code="KST"
           value={k.viewsToday >= 10_000 ? compactKo(k.viewsToday) : k.viewsToday.toLocaleString("ko-KR")}
           sub="자정(KST) 이후 누적"
+          title={`오늘(KST) 전체 기사 조회 ${k.viewsToday.toLocaleString("ko-KR")}회`}
         />
         <Kpi
           label="수집→발행 중앙값"
@@ -150,7 +157,8 @@ export async function DashboardBody() {
         }
       >
         <p className="border-b border-line px-4 py-2.5 text-[12px] leading-relaxed text-fg-3">
-          H1–H4는 ‘어떤 소스 묶음이 더 빠르고 정확한 기사를 만드는가’를 검증하는 편집 가설입니다. 막대는 각 가설의 수집량을 100으로 본 비율이며, 가설끼리는 아래 비율 지표로 비교합니다.
+          H1–H4는 ‘어떤 소스 묶음이 더 빠르고 정확한 기사를 만드는가’를 검증하는 편집 가설입니다. 막대는 가설별 수집 건수를 100%로 둔 길이이며, 가설끼리는
+          비율 지표로 비교합니다.
         </p>
         <ExperimentFunnels funnels={d.funnels} />
       </Card>
@@ -170,7 +178,7 @@ export async function DashboardBody() {
           <RecentActivity entries={d.activity} requestArticles={requestArticles} />
         </Card>
 
-        <Card title={<CardTitle>데이터 자동 기사</CardTitle>} actions={<Badge tone="good">B · 자동</Badge>}>
+        <Card className="self-start" title={<CardTitle>데이터 자동 기사</CardTitle>} actions={<Badge tone="good">B · 자동</Badge>}>
           <p className="mb-3 text-[12.5px] leading-relaxed text-fg-3">
             시세·심리 데이터로 코드 템플릿이 기사를 씁니다. 숫자는 원천 데이터 그대로이며, 만든 뒤 후보 편집기에서 검토하고 발행합니다.
           </p>
@@ -191,7 +199,7 @@ function Alerts({ alerts, nowMs }: { alerts: DashboardData["alerts"]; nowMs: num
 
   return (
     <Card
-      className="min-w-0 self-start"
+      className="order-first min-w-0 self-start xl:order-last"
       pad={false}
       title={<CardTitle>경보</CardTitle>}
       actions={total > 0 ? <Badge tone="bad">처리 필요 {total}</Badge> : <Badge tone="good">정상</Badge>}
@@ -212,7 +220,7 @@ function Alerts({ alerts, nowMs }: { alerts: DashboardData["alerts"]; nowMs: num
               </SubHead>
               <ul>
                 {alerts.requests.map((r) => {
-                  const days = Math.max(0, Math.floor((nowMs - new Date(r.receivedAt).getTime()) / DAY));
+                  const days = kstDaysSince(r.receivedAt, nowMs);
                   const left = 7 - days;
                   return (
                     <li key={r.id}>
@@ -223,21 +231,25 @@ function Alerts({ alerts, nowMs }: { alerts: DashboardData["alerts"]; nowMs: num
                             {r.requester} · {dateKST(r.receivedAt)} 접수 · <span className="tabular font-mono">D+{days}</span>
                           </span>
                         </span>
-                        {days >= 7 ? (
-                          <Badge tone="bad">법정 기한 경과</Badge>
+                        {left < 0 ? (
+                          <Badge tone="bad" title={`게재 기한(접수 후 7일)을 ${-left}일 넘겼습니다`}>
+                            법정 기한 경과
+                          </Badge>
                         ) : days >= 5 ? (
-                          <Badge tone="bad" title={`게재 기한까지 ${left}일`}>
-                            법정 기한 임박
+                          <Badge tone="bad" title={left === 0 ? "오늘이 게재 기한(접수 후 7일)입니다" : `게재 기한까지 ${left}일`}>
+                            법정 기한 임박 · {left === 0 ? "오늘" : `D-${left}`}
                           </Badge>
                         ) : (
-                          <Badge tone="warn">{`기한 D-${left}`}</Badge>
+                          <Badge tone="warn" title={days >= 3 ? "수용 여부 통지 기한(3일)이 지났습니다 — 통지했는지 확인하세요" : `게재 기한까지 ${left}일`}>
+                            {`기한 D-${left}`}
+                          </Badge>
                         )}
                       </Link>
                     </li>
                   );
                 })}
               </ul>
-              <p className="mt-1.5 text-[11px] leading-snug text-fg-4">언론중재법 제15조 — 청구일부터 3일 안에 수용 여부 통지, 7일 안에 정정보도 게재.</p>
+              <p className="mt-1.5 text-[11px] leading-snug text-fg-4">언론중재법 제15조 — 청구를 받은 날부터 3일 안에 수용 여부를 통지하고, 수용하면 7일 안에 정정보도를 게재합니다. D+n은 접수일 기준 경과 일수(KST).</p>
             </section>
           )}
 
@@ -333,7 +345,7 @@ function RecentActivity({ entries, requestArticles }: { entries: DashboardData["
       {entries.map((e) => {
         const kind = activityKind(e.kind);
         const href = activityHref(e.entityType, e.entityId, requestArticles[e.entityId]);
-        const body = <span className="line-clamp-2 sm:line-clamp-1">{e.summary}</span>;
+        const body = <span className="line-clamp-2 sm:line-clamp-1">{presentSummary(e.kind, e.summary)}</span>;
         return (
           <li key={e.id} className="grid grid-cols-[3.75rem_minmax(0,1fr)] items-baseline gap-x-3 px-4 py-2.5 sm:grid-cols-[3.75rem_5.5rem_minmax(0,1fr)_auto]">
             <span className="tabular whitespace-nowrap text-[12px] text-fg-3">

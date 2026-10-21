@@ -10,8 +10,6 @@ export function PrefsMenu() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setPrefs(readPrefs()), []);
-
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -39,7 +37,11 @@ export function PrefsMenu() {
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          // The palette can also switch the theme, so read the stored prefs each time the menu opens.
+          if (!open) setPrefs(readPrefs());
+          setOpen(!open);
+        }}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="읽기 설정"

@@ -13,6 +13,7 @@ import { loadItemsByIds, NewsroomError } from "../newsroom";
 import { fail, ok, type ActionState } from "./result";
 
 const beat = z.enum(["ai", "crypto", "economy", "tech", "sentiment"]);
+const CLAIM_LOST = Symbol("claim-lost");
 const ids = z.array(z.uuid()).min(1).max(50);
 
 /**
@@ -40,6 +41,7 @@ export async function promoteItems(input: {
     fresh.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 
     const groups = p.merge ? [fresh] : fresh.map((r) => [r]);
+    let skipped = 0;
     const generator = getGenerator();
     const created: string[] = [];
 
@@ -67,6 +69,13 @@ export async function promoteItems(input: {
         : null;
 
       const id = await db.transaction(async (tx) => {
+        // Claim the items first: a concurrent promote/dismiss of the same item loses cleanly.
+        const claimed = await tx
+          .update(feedItems)
+          .set({ status: "promoted" })
+          .where(and(inArray(feedItems.id, group.map((r) => r.id)), eq(feedItems.status, "new")))
+          .returning({ id: feedItems.id });
+        if (claimed.length !== group.length) throw CLAIM_LOST; // rolls back this group only
         const [cand] = await tx
           .insert(candidates)
           .values({
@@ -82,10 +91,6 @@ export async function promoteItems(input: {
           })
           .returning({ id: candidates.id });
         await tx.insert(candidateItems).values(group.map((r, i) => ({ candidateId: cand.id, feedItemId: r.id, role: i === 0 ? "primary" : "supporting" })));
-        await tx
-          .update(feedItems)
-          .set({ status: "promoted" })
-          .where(and(inArray(feedItems.id, group.map((r) => r.id)), eq(feedItems.status, "new")));
         await logActivity(tx, {
           actorId: me.id,
           kind: "promote",
@@ -95,12 +100,17 @@ export async function promoteItems(input: {
           meta: { items: group.map((r) => r.id), merge: p.merge },
         });
         return cand.id;
+      }).catch((e) => {
+        if (e === CLAIM_LOST) return null;
+        throw e;
       });
-      created.push(id);
+      if (id) created.push(id);
+      else skipped += group.length;
     }
 
     refresh();
-    return ok(`후보 ${created.length}건을 만들었습니다.`, { candidateIds: created });
+    if (!created.length) throw new NewsroomError("다른 편집자가 먼저 처리한 항목입니다.", "conflict");
+    return ok(`후보 ${created.length}건을 만들었습니다.${skipped ? ` (이미 처리된 ${skipped}건 제외)` : ""}`, { candidateIds: created });
   } catch (e) {
     return fail(e);
   }

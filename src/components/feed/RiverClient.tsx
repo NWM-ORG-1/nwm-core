@@ -30,6 +30,7 @@ export function RiverClient({
   filterable = false,
   showBeat = true,
   dayHeaders = true,
+  headingLevel = 3,
 }: {
   cards: MiniCard[];
   ctx: string;
@@ -38,6 +39,8 @@ export function RiverClient({
   filterable?: boolean;
   showBeat?: boolean;
   dayHeaders?: boolean;
+  /** 2 on pages with no section heading between the page title and the rows. */
+  headingLevel?: 2 | 3;
 }) {
   const router = useRouter();
   const history = useReadHistory();
@@ -57,15 +60,29 @@ export function RiverClient({
   const fresh = live && pulse ? pulse.latest.filter((x) => !known.has(x.s) && x.p > newest) : [];
 
   // "Since your last visit" — only meaningful after hydration and on a return visit.
-  const sinceIdx = mounted && lastVisit > 0 ? visible.findIndex((c) => new Date(c.p).getTime() <= lastVisit) : -1;
-  const sinceCount = sinceIdx > 0 ? sinceIdx : 0;
+  // -1 means every row is newer than the last visit (the list is capped, so "or more").
+  const sinceIdx = mounted && lastVisit > 0 ? visible.findIndex((c) => new Date(c.p).getTime() <= lastVisit) : 0;
+  const allNew = sinceIdx === -1 && visible.length > 0;
+  const sinceCount = allNew ? visible.length : Math.max(sinceIdx, 0);
   const allCaughtUp = sinceCount > 0 && visible.slice(0, sinceCount).every((c) => history[c.s]);
+  const H = headingLevel === 2 ? "h2" : "h3";
+
+  const sinceMarker = (
+    <div className="flex items-center gap-3 py-3" role="separator" aria-label="마지막 방문 이전 기사">
+      <span className="h-px flex-1 bg-gradient-to-r from-transparent to-ice/50" />
+      <span className="kicker text-ice">
+        {allCaughtUp ? "✓ 지난 방문 이후 소식을 모두 확인했어요" : `↑ 지난 방문 이후 ${sinceCount}건${allNew ? " 이상" : ""}`}
+      </span>
+      <span className="h-px flex-1 bg-gradient-to-l from-transparent to-ice/50" />
+    </div>
+  );
 
   // j / k / Enter — roving focus over rows (listener lives only while this list is shown).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== "j" && e.key !== "k") return;
       e.preventDefault();
@@ -81,7 +98,6 @@ export function RiverClient({
     return () => window.removeEventListener("keydown", onKey);
   }, [visible.length]);
 
-  let lastDay = "";
 
   return (
     <QueueScope ctx={ctx} label={label} items={queueItems}>
@@ -123,9 +139,7 @@ export function RiverClient({
 
       <ol ref={listRef} className="relative">
         {visible.map((c, i) => {
-          const day = ymdKST(c.p);
-          const showDay = dayHeaders && day !== lastDay;
-          lastDay = day;
+          const showDay = dayHeaders && (i === 0 || ymdKST(c.p) !== ymdKST(visible[i - 1].p));
           const read = Boolean(history[c.s]);
           const isNew = sinceCount > 0 && i < sinceCount;
           return (
@@ -136,15 +150,7 @@ export function RiverClient({
                   <span className="h-px flex-1 bg-line" />
                 </div>
               )}
-              {i === sinceCount && sinceCount > 0 && (
-                <div className="flex items-center gap-3 py-3" role="separator" aria-label="마지막 방문 이전 기사">
-                  <span className="h-px flex-1 bg-gradient-to-r from-transparent to-ice/50" />
-                  <span className="kicker text-ice">
-                    {allCaughtUp ? "✓ 지난 방문 이후 소식을 모두 확인했어요" : `↑ 지난 방문 이후 ${sinceCount}건`}
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-l from-transparent to-ice/50" />
-                </div>
-              )}
+              {i === sinceCount && sinceCount > 0 && sinceMarker}
               <article className="group relative grid grid-cols-[52px_1fr] gap-x-3 border-b border-line py-4 sm:grid-cols-[64px_1fr]">
                 <div className="read-dim pt-[3px]">
                   <span className="tabular block font-mono text-[12px] text-fg-3">{clockKST(c.p)}</span>
@@ -161,7 +167,7 @@ export function RiverClient({
                     {c.br && <span className="hud !text-[9.5px] text-live">BREAKING</span>}
                     {c.st && <span className="truncate text-fg-3">스토리 · {c.st}</span>}
                   </div>
-                  <h3 className="text-[17px] font-bold leading-snug tracking-[-0.02em] text-fg sm:text-[18px]">
+                  <H className="text-[17px] font-bold leading-snug tracking-[-0.02em] text-fg sm:text-[18px]">
                     <IntentLink
                       href={`/a/${c.s}`}
                       data-row-link
@@ -171,7 +177,7 @@ export function RiverClient({
                     >
                       {c.t}
                     </IntentLink>
-                  </h3>
+                  </H>
                   <p className="mt-1 line-clamp-2 text-[14.5px] leading-relaxed text-fg-3">{c.d}</p>
                   <p className="mt-2 flex items-center gap-2 text-[11.5px] text-fg-4">
                     <span>{readTimeLabel(c.r)}</span>
@@ -191,6 +197,7 @@ export function RiverClient({
           );
         })}
       </ol>
+      {allNew && sinceMarker}
       {visible.length === 0 && <p className="py-12 text-center text-[14px] text-fg-3">아직 이 분야의 기사가 없습니다.</p>}
     </QueueScope>
   );

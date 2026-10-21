@@ -163,14 +163,26 @@ function StoryRow({ story, editing, onEdit, onClose }: { story: StoryView; editi
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    const next = { title: draft.title.trim(), summary: draft.summary.trim(), status: draft.status };
+    if (next.title === story.title && next.summary === story.summary && next.status === story.status) {
+      cancel(); // nothing changed: no write, no activity entry
+      return;
+    }
     start(async () => {
-      setView({ story: { ...story, ...draft, title: draft.title.trim(), summary: draft.summary.trim() }, editing: false });
-      const res = await updateStory({ id: story.id, ...draft });
+      setView({ story: { ...story, ...next }, editing: false });
+      let res: ActionState<{ id: string; slug: string }>;
+      try {
+        res = await updateStory({ id: story.id, ...next });
+      } catch {
+        res = { ok: false, error: "서버에 연결하지 못했습니다. 다시 시도하세요.", at: Date.now() };
+      }
       startTransition(() => {
         if (res?.ok) {
           onClose();
           router.refresh();
+          requestAnimationFrame(() => editBtn.current?.focus());
         } else {
+          // the optimistic view falls back to the open form, draft intact
           setError(res?.error ?? "저장하지 못했습니다.");
         }
       });
@@ -301,7 +313,7 @@ function StoryRow({ story, editing, onEdit, onClose }: { story: StoryView; editi
         {s.summary ? (
           <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-fg-3 md:line-clamp-1">{s.summary}</p>
         ) : (
-          <p className="mt-0.5 text-[12.5px] italic text-fg-4">요약 없음</p>
+          <p className="mt-0.5 text-[12.5px] text-fg-4">요약 없음</p>
         )}
         <p className="tabular mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-fg-3 md:hidden">
           <span>기사 {s.articleCount}건</span>
@@ -356,7 +368,12 @@ export function CreateStoryForm() {
   const [{ res, key }, action, pending] = useActionState<CreateState, FormData>(
     async (prev, fd) => {
       const summary = String(fd.get("summary") ?? "").trim();
-      const r = await createStory({ title: String(fd.get("title") ?? ""), beat: String(fd.get("beat") ?? ""), summary: summary || undefined });
+      let r: CreateState["res"];
+      try {
+        r = await createStory({ title: String(fd.get("title") ?? ""), beat: String(fd.get("beat") ?? ""), summary: summary || undefined });
+      } catch {
+        r = { ok: false, error: "서버에 연결하지 못했습니다. 다시 시도하세요.", at: Date.now() };
+      }
       return { res: r, key: r?.ok ? prev.key + 1 : prev.key };
     },
     { res: null, key: 0 },

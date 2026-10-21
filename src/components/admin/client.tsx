@@ -7,15 +7,14 @@ import { btn, cx } from "./ui";
 
 /** Shows the outcome of a server action (success / error). */
 export function ActionMessage({ state, className = "" }: { state: ActionState<unknown>; className?: string }) {
-  const [visible, setVisible] = useState(true);
+  // A success message fades after a few seconds; a new result (a new object) shows again.
+  const [dismissed, setDismissed] = useState<ActionState<unknown> | null>(null);
   useEffect(() => {
-    setVisible(true);
-    if (state?.ok) {
-      const t = setTimeout(() => setVisible(false), 3500);
-      return () => clearTimeout(t);
-    }
+    if (!state?.ok) return;
+    const t = setTimeout(() => setDismissed(state), 3500);
+    return () => clearTimeout(t);
   }, [state]);
-  if (!state || !visible) return null;
+  if (!state || dismissed === state) return null;
   if (state.ok && !state.message) return null;
   return (
     <p role={state.ok ? "status" : "alert"} className={cx("text-[12.5px] font-medium", state.ok ? "text-good" : "text-bad", className)}>

@@ -107,7 +107,9 @@ npm run dev                          # http://localhost:3000
    | `INTERNAL_API_SECRET` | 임의의 긴 문자열 |
    | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | `openssl rand -base64 32` (배포 간 고정) |
    | `NEXT_PUBLIC_SITE_URL` | `https://newweb.media` |
-   | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0` |
+   | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0`. 이미 쓰고 있는 DB(실제 기사·계정·가설이 있거나 샘플을 지운 적이 있음)에는 다시 넣지 않습니다. |
+   | `LEGAL_*` (선택) | 법정 표기. 빌드 때 페이지에 들어가므로 **다음 배포부터** 반영됩니다. 바로 반영하려면 `/admin/settings`에서 입력합니다. |
+   | `TRUSTED_PROXY_HOPS` | 기본 `1` (Railway 엣지). 앞에 CDN을 두면 `2` |
 
 4. 빌드 순서 (Dockerfile): `db:migrate`(advisory lock) → (선택) `db:seed --if-empty` → `next build`.
    - 빌드가 DB에서 데이터를 읽어 페이지를 미리 만듭니다.
@@ -117,7 +119,9 @@ npm run dev                          # http://localhost:3000
 7. 도메인: Railway 서비스에 `newweb.media`를 연결합니다.
 
 **출시 전 체크리스트**
-- 샘플 데이터를 지웁니다: `npm run db:purge-samples`. 샘플이 남아 있으면 데모 배너가 뜨고 검색엔진 색인도 막힌 상태입니다.
+- 샘플 데이터를 지웁니다: `railway run npm run db:purge-samples`. 샘플이 남아 있으면 데모 배너가 뜨고 검색엔진 색인도 막힌 상태입니다.
+  - 스크립트가 끝나면 `NEXT_PUBLIC_SITE_URL`의 `/api/internal/revalidate`를 호출해 데모 배너·noindex·샘플 기사 캐시를 바로 지웁니다 (`INTERNAL_API_SECRET` 필요). 호출하지 못하면 경고만 남고, 페이지는 각자의 갱신 주기(최대 6시간)에 맞춰 바뀝니다.
+- 첫 로그인 계정은 이름이 ‘편집국’입니다. `/admin/settings` → **내 편집자 프로필**에서 실명을 입력해야 AI 초안·보조 기사를 발행할 수 있습니다.
 - 인터넷신문 등록 후 `/admin/settings`에서 법정 표기를 입력합니다.
 - 등록 완료 전에는 `SITE_LOCK=1`로 사이트 전체를 잠글 수 있습니다.
 
@@ -129,7 +133,7 @@ npm run dev                          # http://localhost:3000
 | `npm run typecheck` · `lint` | 타입·린트 |
 | `npm run db:generate` · `db:migrate` | 마이그레이션 생성·적용 |
 | `npm run db:seed [-- --if-empty]` | 샘플 데이터 (재실행하면 샘플을 갈아끼우고 시각을 지금으로 맞춤) |
-| `npm run db:purge-samples` | 샘플 데이터 삭제 |
+| `npm run db:purge-samples` | 샘플 데이터 삭제 (실행 중인 서버의 캐시도 갱신) |
 | `npm run audit:build` | 공개 라우트가 모두 정적인지 빌드 결과를 검사 |
 | `npm run test:e2e` | Playwright (공개·읽기 흐름·뉴스룸·성능 예산) |
 | `npm run verify` | 위 전체 |

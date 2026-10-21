@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/Icon";
 
 type PaletteProps = { onClose: () => void };
@@ -13,6 +14,8 @@ export function SearchTrigger() {
   const load = useCallback(() => {
     if (!Palette) import("./CommandPalette").then((m) => setPalette(() => m.CommandPalette));
   }, [Palette]);
+
+  const close = useCallback(() => setOpen(false), []);
 
   const show = useCallback(() => {
     load();
@@ -54,7 +57,8 @@ export function SearchTrigger() {
         <span className="hidden text-[13px] sm:inline">검색</span>
         <kbd className="hud hidden rounded-md border border-line px-1.5 py-0.5 !text-[10px] text-fg-4 sm:inline">⌘K</kbd>
       </button>
-      {open && Palette && <Palette onClose={() => setOpen(false)} />}
+      {/* Portaled so the header's backdrop-filter doesn't become the overlay's containing block. */}
+      {open && Palette && createPortal(<Palette onClose={close} />, document.body)}
     </>
   );
 }

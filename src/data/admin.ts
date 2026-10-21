@@ -22,7 +22,7 @@ import {
 } from "@/db/schema";
 import { LEGAL_DEFAULTS, legalFromEnv, type Legal } from "@/lib/site";
 import { requireStaff } from "@/server/auth";
-import { loadCandidateItems } from "@/server/newsroom";
+import { isPlaceholderStaff, loadCandidateItems } from "@/server/newsroom";
 
 /**
  * Newsroom read model. Always dynamic: every loader awaits `connection()` and
@@ -163,12 +163,12 @@ export async function getDashboard() {
       (select count(*) from candidates where created_at >= now() - interval '24 hours')::int as promoted,
       (select count(*) from articles where status = 'published' and published_at >= now() - interval '24 hours')::int as published,
       (select coalesce(sum(views), 0) from article_stats_daily where day = (now() at time zone 'Asia/Seoul')::date)::int as views_today,
-      (select count(*) from articles where published_at >= now() - interval '7 days' and ai_involvement = 'auto')::int as auto,
-      (select count(*) from articles where published_at >= now() - interval '7 days' and ai_involvement = 'ai_draft_edited')::int as ai_draft_edited,
-      (select count(*) from articles where published_at >= now() - interval '7 days' and ai_involvement = 'ai_assisted')::int as ai_assisted,
-      (select count(*) from articles where published_at >= now() - interval '7 days' and ai_involvement = 'human')::int as human,
-      (select count(*) from articles where published_at >= now() - interval '7 days' and (editor_id is not null or ai_involvement in ('auto','human')))::int as named,
-      (select count(*) from articles where published_at >= now() - interval '7 days')::int as total7,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days' and ai_involvement = 'auto')::int as auto,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days' and ai_involvement = 'ai_draft_edited')::int as ai_draft_edited,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days' and ai_involvement = 'ai_assisted')::int as ai_assisted,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days' and ai_involvement = 'human')::int as human,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days' and (editor_id is not null or ai_involvement in ('auto','human')))::int as named,
+      (select count(*) from articles where status = 'published' and published_at >= now() - interval '7 days')::int as total7,
       (select percentile_cont(0.5) within group (order by extract(epoch from (a.published_at - t.first_seen)) / 60)
          from articles a
          join (select ci.candidate_id, min(i.fetched_at) as first_seen
@@ -655,6 +655,12 @@ async function recentActivity(limit: number, kind?: string) {
 export async function getActivity(f: { kind?: string }) {
   await guard();
   return recentActivity(200, f.kind);
+}
+
+/** The signed-in editor's own profile (settings page). */
+export async function getMyProfile() {
+  const me = await guard();
+  return { name: me.name, title: me.title, bio: me.bio, slug: me.slug, login: me.login, placeholder: isPlaceholderStaff(me) };
 }
 
 export async function getSettingsAdmin(): Promise<{ stored: Partial<Legal>; env: Partial<Legal>; effective: Legal }> {

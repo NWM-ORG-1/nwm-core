@@ -1,5 +1,9 @@
 /** Labels shared by the dashboard, activity, stories and settings screens (server + client safe). */
 
+import type { CandidateStatus } from "@/db/schema";
+import { clockKST, dateKST } from "@/lib/format";
+import { CANDIDATE_STATUS_LABEL } from "@/lib/labels";
+
 export type Tone = "neutral" | "ice" | "good" | "warn" | "bad" | "live";
 
 export const ACTIVITY_KIND: Record<string, { label: string; tone: Tone }> = {
@@ -44,6 +48,35 @@ export const ACTIVITY_TAB_ORDER = [
 
 export function activityKind(kind: string) {
   return ACTIVITY_KIND[kind] ?? { label: kind, tone: "neutral" as const };
+}
+
+/** Assist action ids as the editor's AI 어시스트 panel names them. */
+const ASSIST_LABEL: Record<string, string> = {
+  headlines: "제목 후보",
+  tighten: "간결하게",
+  why: "왜 중요한가",
+  numbers: "숫자로 보면",
+  next: "다음 관전 포인트",
+};
+
+const ISO_RE = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})\b/g;
+
+/**
+ * Activity summaries are stored as written by each action, some with machine
+ * values in them (ISO timestamps, status codes, assist ids). Render those in
+ * newsroom Korean; the stored text is left untouched for the audit trail.
+ */
+export function presentSummary(kind: string, summary: string): string {
+  let s = summary.replace(ISO_RE, (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : `${dateKST(d)} ${clockKST(d)}`;
+  });
+  if (kind === "move") {
+    s = s.replace(/\b(new|drafting|review|scheduled|published|rejected)\b/g, (code) => CANDIDATE_STATUS_LABEL[code as CandidateStatus] ?? code);
+  } else if (kind === "assist") {
+    s = s.replace(/^(AI 어시스트: )([a-z_]+)$/, (all, head: string, id: string) => (ASSIST_LABEL[id] ? head + ASSIST_LABEL[id] : all));
+  }
+  return s;
 }
 
 export const ENTITY_LABEL: Record<string, string> = {

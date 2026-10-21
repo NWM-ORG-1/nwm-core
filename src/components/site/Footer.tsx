@@ -24,7 +24,7 @@ export function Footer({ legal }: { legal: Legal }) {
           </div>
         </div>
 
-        <nav aria-label="분야">
+        <nav aria-label="하단 분야 메뉴">
           <p className="kicker mb-3 text-fg-4">분야</p>
           <ul className="space-y-2 text-[14px]">
             {BEAT_ORDER.map((b) => (

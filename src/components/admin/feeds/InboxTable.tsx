@@ -6,6 +6,7 @@ import {
   startTransition,
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useMemo,
   useOptimistic,
@@ -62,6 +63,7 @@ export function InboxTable({ items, tab }: { items: InboxItem[]; tab: InboxStatu
   const [pending, start] = useTransition();
   const [processing, markProcessing] = useOptimistic<ReadonlySet<string>, string[]>(NO_IDS, (cur, ids) => new Set([...cur, ...ids]));
 
+  const uid = useId(); // detail-row ids stay unique when Activity keeps another inbox view mounted
   const rootRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<string | null>(null);
   const shiftRef = useRef(false);
@@ -279,18 +281,26 @@ export function InboxTable({ items, tab }: { items: InboxItem[]; tab: InboxStatu
             <Kbd>J</Kbd>
             <Kbd>K</Kbd> 이동
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>X</Kbd> 선택
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>⇧</Kbd>+클릭 범위
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>P</Kbd> 승격
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>D</Kbd> 기각
-          </span>
+          {tab !== "promoted" && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>X</Kbd> 선택
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>⇧</Kbd>+클릭 범위
+              </span>
+            </>
+          )}
+          {(tab === "new" || tab === "all") && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>P</Kbd> 승격
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>D</Kbd> 기각
+              </span>
+            </>
+          )}
           <span className="inline-flex items-center gap-1">
             <Kbd>↵</Kbd> 펼치기
           </span>
@@ -300,7 +310,7 @@ export function InboxTable({ items, tab }: { items: InboxItem[]; tab: InboxStatu
         </p>
       </div>
 
-      <div className="panel overflow-hidden">
+      <div className="panel relative overflow-hidden">
         <table className="w-full border-collapse text-left text-[13px]">
           <caption className="sr-only">피드 항목 목록. J와 K로 이동하고 X로 선택합니다.</caption>
           <thead className="bg-bg-1/40">
@@ -344,7 +354,7 @@ export function InboxTable({ items, tab }: { items: InboxItem[]; tab: InboxStatu
               const isCur = cursor === it.id;
               const isOpen = expanded.has(it.id);
               const busy = processing.has(it.id);
-              const detailId = `inbox-detail-${it.id}`;
+              const detailId = `${uid}-detail-${it.id}`;
               return (
                 <Fragment key={it.id}>
                   <tr
@@ -427,10 +437,8 @@ export function InboxTable({ items, tab }: { items: InboxItem[]; tab: InboxStatu
                             signalOnly={it.source.signalOnly}
                           />
                         )}
-                        <StatusCell item={it} compact />
-                      </div>
-                      <div className="mt-1 pl-5 md:hidden">
-                        <Stamp iso={it.fetchedAt} />
+                        <Stamp iso={it.fetchedAt} inline />
+                        {(tab !== "new" || it.status !== "new") && <StatusCell item={it} compact />}
                       </div>
                     </td>
                     <td className="hidden border-b border-line px-3 py-3 align-top lg:table-cell">

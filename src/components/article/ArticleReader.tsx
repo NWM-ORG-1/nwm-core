@@ -50,8 +50,11 @@ export function ReaderShell({ slug, beat, tags, readSeconds, fallback, children 
   // keyboard — layout effect so keys work the instant the page commits
   useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A focused widget (chart crosshair, dialog, form field) owns its arrow keys.
+      if (e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (t?.closest?.("[data-noswipe],[role=dialog]")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "j" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -70,37 +73,50 @@ export function ReaderShell({ slug, beat, tags, readSeconds, fallback, children 
     return () => window.removeEventListener("keydown", onKey);
   }, [go]);
 
-  // swipe (touch only; vertical scroll stays native via touch-action: pan-y)
+  // swipe (touch only; vertical scroll and pinch-zoom stay native via touch-action: pan-y pinch-zoom)
   useEffect(() => {
     const el = areaRef.current;
     if (!el) return;
     let x0 = 0;
     let y0 = 0;
+    let id = -1;
     let active = false;
     let locked: "x" | "y" | null = null;
+    const reset = () => {
+      active = false;
+      el.style.transform = "";
+      el.style.willChange = "";
+    };
     const down = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return;
+      if (!e.isPrimary || active) return reset(); // a second finger means pinch, not swipe
       const target = e.target as HTMLElement;
       if (target.closest("[data-noswipe],a,button,input,textarea,select")) return;
       if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // OS edge gestures
+      id = e.pointerId;
       x0 = e.clientX;
       y0 = e.clientY;
       active = true;
       locked = null;
     };
     const move = (e: PointerEvent) => {
-      if (!active) return;
+      if (!active || e.pointerId !== id) return;
       const dx = e.clientX - x0;
       const dy = e.clientY - y0;
-      if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) locked = Math.abs(dx) > Math.abs(dy) * 1.7 ? "x" : "y";
+      if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        locked = Math.abs(dx) > Math.abs(dy) * 1.7 ? "x" : "y";
+        if (locked === "x") el.style.willChange = "transform";
+      }
       if (locked === "x") el.style.transform = `translate3d(${dx * 0.35}px,0,0)`;
     };
     const up = (e: PointerEvent) => {
-      if (!active) return;
+      if (!active || e.pointerId !== id) return;
       active = false;
       el.style.transition = "transform 220ms cubic-bezier(.16,1,.3,1)";
       el.style.transform = "";
+      el.style.willChange = "";
       setTimeout(() => (el.style.transition = ""), 240);
+      if (e.type === "pointercancel") return; // the browser took over (pinch or scroll)
       const dx = e.clientX - x0;
       const dy = e.clientY - y0;
       const angleOk = Math.abs(dy) < Math.abs(dx) * Math.tan((30 * Math.PI) / 180);
@@ -185,16 +201,22 @@ export function ReaderShell({ slug, beat, tags, readSeconds, fallback, children 
     return () => clearTimeout(t);
   }, [toast]);
 
+  // The toast lives outside the swipe area: a transformed ancestor would become the
+  // containing block of the fixed toast and push it off-screen.
   return (
-    <div ref={areaRef} className="touch-pan-y will-change-transform">
-      {children}
-      <div ref={endRef} aria-hidden="true" className="h-px" />
-      {toast && (
-        <div role="status" className="animate-rise fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border border-line-2 bg-bg-1 px-4 py-2 text-[13px] text-fg shadow-[var(--shadow-pop)]">
-          {toast}
-        </div>
-      )}
-    </div>
+    <>
+      <div ref={areaRef} className="touch-pan-y touch-pinch-zoom">
+        {children}
+        <div ref={endRef} aria-hidden="true" className="h-px" />
+      </div>
+      <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2">
+        {toast && (
+          <div key={toast} className="animate-rise rounded-full border border-line-2 bg-bg-1 px-4 py-2 text-[13px] whitespace-nowrap text-fg shadow-[var(--shadow-pop)]">
+            {toast}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -205,6 +227,7 @@ export function ReaderDock({ slug, fallback }: { slug: string; fallback: Queue }
   const total = queue.items.length;
   return (
     <nav
+      data-reader-dock
       aria-label="이전·다음 기사"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-[color-mix(in_srgb,var(--bg)_86%,transparent)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
       style={{ viewTransitionName: "reader-dock" }}

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Draft } from "@/lib/content/blocks";
 import { plainText } from "@/lib/content/blocks";
 import type { CandidateMode, CheckId, CheckResult } from "@/db/schema";
@@ -29,6 +30,21 @@ export const CHECK_META: Record<CheckId, { label: string; blocking: boolean }> =
 };
 
 const PRIMARY_KINDS = new Set(["filing", "press", "data", "report", "paper"]);
+
+/** Stable fingerprint of a draft — the legal sign-off is only valid for this exact text. */
+export function draftHash(d: Draft): string {
+  return createHash("sha1").update(JSON.stringify(d)).digest("hex").slice(0, 16);
+}
+
+/** Leaf values of a feed payload, skipping identifier-like strings (receipt numbers, CIKs …). */
+function payloadLeaves(v: unknown): string[] {
+  if (v == null) return [];
+  if (typeof v === "number") return [String(v)];
+  if (typeof v === "string") return /^\d{8,}$|^\d{4}\.\d{4,}/.test(v) ? [] : [v];
+  if (Array.isArray(v)) return v.flatMap(payloadLeaves);
+  if (typeof v === "object") return Object.values(v as Record<string, unknown>).flatMap(payloadLeaves);
+  return [];
+}
 
 function sentences(t: string) {
   return t.split(/(?<=[.!?。])\s+|(?<=다\.)\s*/).filter((s) => s.trim().length > 0);
@@ -89,7 +105,9 @@ export function runChecks(input: {
 
   // sources
   const primaryItem = usable.some((i) => i.trustTier <= 2);
-  const primaryRef = draft.sources.some((s) => s.kind && PRIMARY_KINDS.has(s.kind));
+  // refs that merely echo a linked community/unverified source never count as primary
+  const lowTier = new Set(items.filter((i) => i.trustTier >= 3 || i.signalOnly).map((i) => i.sourceName));
+  const primaryRef = draft.sources.some((s) => s.kind && PRIMARY_KINDS.has(s.kind) && !lowTier.has(s.name));
   const srcOk = mode === "data_auto" ? draft.sources.length > 0 : primaryItem || primaryRef;
   push(
     "sources",
@@ -123,17 +141,30 @@ export function runChecks(input: {
         : "책임 편집자가 필요합니다",
   );
 
-  // legal — manual confirmation, preserved across re-runs
+  // legal — manual confirmation, valid only for the exact draft it was given for
   const legal = prev.get("legal");
-  push("legal", Boolean(legal?.ok), legal?.ok ? legal.message : "편집자가 직접 확인해야 합니다");
+  const hash = draftHash(draft);
+  const legalValid = Boolean(legal?.ok && legal.draftHash === hash);
+  push(
+    "legal",
+    legalValid,
+    legalValid ? legal!.message : legal?.ok ? "확인 이후 초안이 바뀌었습니다 — 다시 확인하세요" : "편집자가 직접 확인해야 합니다",
+  );
+  if (legalValid) out[out.length - 1].draftHash = hash;
 
   // numbers
   if (mode === "data_auto") {
     push("numbers", true, "데이터 템플릿 — 수치는 원천 데이터에서 자동 입력");
   } else {
-    const haystack = items.map((i) => `${i.title} ${i.summary} ${JSON.stringify(i.payload)}`).join(" ").replace(/,/g, "");
-    const nums = [...new Set((text.match(NUM_TOKEN) ?? []).map((n) => n.replace(/,/g, "")))].filter((n) => n.length >= 2);
-    const unmatched = nums.filter((n) => !haystack.includes(n));
+    const haystack = items
+      .map((i) => [i.title, i.summary, ...payloadLeaves(i.payload)].join(" "))
+      .join(" ")
+      .replace(/(\d),(?=\d)/g, "$1");
+    // also check KeyNumber deltas, which plainText() leaves out (chart series are data, checked by eye)
+    const checked = [text, ...draft.blocks.flatMap((b) => (b.type === "numbers" ? b.items.map((n) => n.delta ?? "") : []))].join(" ");
+    const nums = [...new Set((checked.match(NUM_TOKEN) ?? []).map((n) => n.replace(/,/g, "")))];
+    const has = (n: string) => new RegExp(`(?<![\\d.])${n.replace(/\./g, "\\.")}(?!\\d)`).test(haystack);
+    const unmatched = nums.filter((n) => !has(n));
     push(
       "numbers",
       unmatched.length === 0,

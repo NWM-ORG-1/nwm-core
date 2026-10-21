@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db/client";
 import {
@@ -16,6 +16,7 @@ import { BEAT_ORDER } from "@/lib/beats";
 import { T } from "@/lib/cache-tags";
 import { clusterTop } from "@/lib/rank";
 import { related } from "@/lib/recommend";
+import { isYmd } from "@/lib/format";
 import { LEGAL_DEFAULTS, legalFromEnv, type Legal } from "@/lib/site";
 import type {
   ArticleCard,
@@ -212,7 +213,7 @@ export async function getDay(ymd: string): Promise<ArticleCard[]> {
   "use cache";
   cacheLife("river");
   cacheTag(T.feed);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return [];
+  if (!isYmd(ymd)) return [];
   return listCards({ limit: 300, dayKST: ymd });
 }
 
@@ -282,7 +283,8 @@ export async function getArticle(slug: string): Promise<ArticleFull | null> {
     blocks: row.blocks,
     sources: row.sources,
     sentiment: row.sentiment ?? null,
-    byline: row.byline,
+    // Personal bylines follow the live staff name, so a rename never leaves the old one behind.
+    byline: row.author ? `글 · ${row.author.name}` : row.byline,
     editor: person(row.editor),
     author: person(row.author),
     revision: row.revision,
@@ -351,11 +353,19 @@ export async function getStory(slug: string): Promise<{ story: StoryDTO; article
   const s = await db.query.stories.findFirst({ where: eq(stories.slug, slug) });
   if (!s) return null;
   cacheTag(T.story(s.id));
-  return { story: toStory(s), articles: await listCards({ storyId: s.id, limit: 100 }) };
+  // A story with no published update is an editorial plan, not a public page.
+  const cards = await listCards({ storyId: s.id, limit: 100 });
+  if (cards.length === 0) return null;
+  return { story: toStory(s), articles: cards };
 }
 
 export async function getStorySlugs(): Promise<string[]> {
-  const rows = await db.select({ slug: stories.slug }).from(stories).orderBy(desc(stories.lastPublishedAt)).limit(200);
+  const rows = await db
+    .select({ slug: stories.slug })
+    .from(stories)
+    .where(gt(stories.articleCount, 0))
+    .orderBy(desc(stories.lastPublishedAt))
+    .limit(200);
   return rows.map((r) => r.slug);
 }
 
@@ -529,7 +539,8 @@ export interface SiteFlags {
 export async function getSiteFlags(): Promise<SiteFlags> {
   "use cache";
   cacheLife("reference");
-  cacheTag(T.site, T.feed);
+  // only `site`: this runs in the (site) layout, so any broader tag would re-render every page
+  cacheTag(T.site);
   const [demoRow] = await db.execute<{ demo: boolean }>(
     sql`select exists(select 1 from articles where is_sample and status = 'published') as demo`,
   );
@@ -572,7 +583,11 @@ export async function getSitemapEntries(): Promise<{
     .where(published)
     .orderBy(desc(articles.publishedAt))
     .limit(5000);
-  const s = await db.select({ slug: stories.slug, updatedAt: stories.lastPublishedAt }).from(stories).limit(1000);
+  const s = await db
+    .select({ slug: stories.slug, updatedAt: stories.lastPublishedAt })
+    .from(stories)
+    .where(gt(stories.articleCount, 0))
+    .limit(1000);
   return {
     articles: a.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt.toISOString() })),
     stories: s.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt?.toISOString() ?? null })),

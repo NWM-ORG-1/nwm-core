@@ -1,8 +1,8 @@
 import "server-only";
-import { inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { connection } from "next/server";
 import { db } from "@/db/client";
-import { correctionRequests } from "@/db/schema";
+import { activityLog, correctionRequests, staff } from "@/db/schema";
 import { requireStaff } from "@/server/auth";
 
 /**
@@ -27,6 +27,50 @@ export async function getActivityKindCounts(): Promise<{ total: number; byKind: 
   const rows = await db.execute<{ kind: string; n: number }>(sql`select kind, count(*)::int as n from activity_log group by kind`);
   const byKind = Object.fromEntries(rows.map((r) => [r.kind, r.n]));
   return { total: rows.reduce((a, r) => a + r.n, 0), byKind };
+}
+
+export interface ActivityEntry {
+  id: number;
+  at: string;
+  kind: string;
+  entityType: string;
+  entityId: string;
+  summary: string;
+  actor: string;
+}
+
+/**
+ * One page of the audit trail, newest first, optionally filtered by kind.
+ * Keyset-paginated on (at, id): rows written in one transaction share `at`,
+ * so the id breaks ties and no entry is skipped or repeated across pages.
+ */
+export async function getActivityPage(f: { kind?: string; before?: number; limit: number }): Promise<{ entries: ActivityEntry[]; hasMore: boolean }> {
+  await connection();
+  await requireStaff();
+  const where: SQL[] = [];
+  if (f.kind) where.push(eq(activityLog.kind, f.kind));
+  if (f.before != null) {
+    where.push(sql`(${activityLog.at}, ${activityLog.id}) < (select c.at, c.id from activity_log c where c.id = ${f.before})`);
+  }
+  const rows = await db
+    .select({
+      id: activityLog.id,
+      at: activityLog.at,
+      kind: activityLog.kind,
+      entityType: activityLog.entityType,
+      entityId: activityLog.entityId,
+      summary: activityLog.summary,
+      actor: staff.name,
+    })
+    .from(activityLog)
+    .leftJoin(staff, eq(activityLog.actorId, staff.id))
+    .where(where.length ? and(...where) : undefined)
+    .orderBy(desc(activityLog.at), desc(activityLog.id))
+    .limit(f.limit + 1);
+  return {
+    entries: rows.slice(0, f.limit).map((r) => ({ ...r, at: r.at.toISOString(), actor: r.actor ?? "시스템" })),
+    hasMore: rows.length > f.limit,
+  };
 }
 
 /** correction_request id → article id, so request entries can link to their article. */

@@ -11,8 +11,12 @@ export interface Prefs {
 
 export const DEFAULT_PREFS: Prefs = { theme: "dark", size: "md" };
 
-/** Inline <head> script: no flash of the wrong theme, page stays fully static. */
-export const PREFS_SCRIPT = `(function(){try{var d=document.documentElement;d.setAttribute("data-js","");var p=JSON.parse(localStorage.getItem("${PREFS_KEY}")||"{}");if(p.theme==="light"||p.theme==="dark")d.setAttribute("data-theme",p.theme);if(p.size==="sm"||p.size==="lg")d.setAttribute("data-size",p.size)}catch(e){}})()`;
+/**
+ * Inline <head> script: no flash of the wrong theme, page stays fully static.
+ * It also owns the only theme-color meta (React never renders one), so the browser
+ * toolbar matches the reading mode and a toggle isn't undone by a re-render.
+ */
+export const PREFS_SCRIPT = `(function(){var m=document.createElement("meta");m.name="theme-color";m.content="#05060a";document.head.appendChild(m);try{var d=document.documentElement;d.setAttribute("data-js","");var p=JSON.parse(localStorage.getItem("${PREFS_KEY}")||"{}");if(p.theme==="light"||p.theme==="dark")d.setAttribute("data-theme",p.theme);if(p.theme==="light")m.content="#f3f5ff";if(p.size==="sm"||p.size==="lg")d.setAttribute("data-size",p.size)}catch(e){}})()`;
 
 export function readPrefs(): Prefs {
   try {

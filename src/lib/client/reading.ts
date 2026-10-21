@@ -87,8 +87,11 @@ export interface Queue {
 const QUEUE_KEY = "nwm:queue";
 
 /** Remember the list the reader is navigating, so next/prev follow it. */
-export function setQueue(q: Queue) {
-  writeJSON("session", QUEUE_KEY, { ...q, items: q.items.slice(0, 120) });
+export function setQueue(q: Queue, focus?: string) {
+  // Keep a window around the opened item so a click deep in a long list still has a queue.
+  const at = focus ? Math.max(0, q.items.findIndex((x) => x.s === focus)) : 0;
+  const start = Math.max(0, Math.min(at - 20, q.items.length - 120));
+  writeJSON("session", QUEUE_KEY, { ...q, items: q.items.slice(start, start + 120) });
 }
 
 export function getQueue(): Queue | null {

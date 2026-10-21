@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { startTransition, useLayoutEffect, useState, useTransition } from "react";
+import { startTransition, useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import type { Beat } from "@/db/schema";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
@@ -40,6 +40,28 @@ export function RefreshButton() {
   );
 }
 
+/**
+ * Horizontal scroller that brings its `[aria-current="page"]` child into view
+ * (filter tabs on narrow screens). Re-runs when `activeKey` changes.
+ */
+export function ScrollActiveIntoView({ children, className, activeKey }: { children: ReactNode; className?: string; activeKey: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = ref.current;
+    const el = box?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!box || !el || box.scrollWidth <= box.clientWidth) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.left >= b.left + 16 && r.right <= b.right - 32) return;
+    box.scrollTo({ left: Math.max(0, box.scrollLeft + (r.left - b.left) - (b.width - r.width) / 2) });
+  }, [activeKey]);
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
+  );
+}
+
 export interface DataTemplateOption {
   id: string;
   label: string;
@@ -67,7 +89,12 @@ export function DataAutoPanel({ templates }: { templates: DataTemplateOption[] }
     setRunning(id);
     setState(null);
     start(async () => {
-      const res = await createDataAuto({ template: id });
+      let res: ActionState<{ id: string }>;
+      try {
+        res = await createDataAuto({ template: id });
+      } catch {
+        res = { ok: false, error: "서버에 연결하지 못했습니다. 네트워크를 확인한 뒤 다시 시도하세요.", at: Date.now() };
+      }
       startTransition(() => {
         setState(res);
         if (res?.ok && res.data) router.push(`/admin/candidates/${res.data.id}`);
@@ -96,6 +123,7 @@ export function DataAutoPanel({ templates }: { templates: DataTemplateOption[] }
               </span>
               <span className="mt-0.5 block truncate text-[12px] text-fg-3">{t.description}</span>
             </span>
+            <span className="sr-only">— 후보 만들고 편집기 열기</span>
             {busy ? (
               <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-fg-3 border-t-transparent" aria-hidden="true" />
             ) : (

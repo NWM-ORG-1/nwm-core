@@ -1,7 +1,7 @@
 /**
  * Sample data loader.
  *   npm run db:seed               → replace all sample rows (times are re-anchored to now)
- *   npm run db:seed -- --if-empty → only when the database has no articles (first deploy)
+ *   npm run db:seed -- --if-empty → only on a database nobody has used yet (first deploy)
  */
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
@@ -11,7 +11,9 @@ import * as s from "../schema";
 import type { CheckResult } from "../schema";
 import { blockSchema, draftSchema, readSecondsFor, sentimentSnapshotSchema, sourceRefSchema } from "@/lib/content/blocks";
 import { ymdKST } from "@/lib/format";
+import { T } from "@/lib/cache-tags";
 import { CHECK_META } from "@/server/checks";
+import { ALL_LIST_TAGS, revalidateLive } from "../../../scripts/lib/revalidate";
 import { EXPERIMENTS, STAFF, STORIES } from "./content/cast";
 import { hash32, mulberry32, QUOTES, SENTIMENT_SCOPES, SENTIMENT_SOURCES, walk } from "./content/market";
 import { purgeSamples } from "./purge";
@@ -49,9 +51,15 @@ const BEAT_EXPERIMENT: Record<s.Beat, "H1" | "H2" | "H3" | "H4"> = {
 async function main() {
   const ifEmpty = process.argv.includes("--if-empty");
   if (ifEmpty) {
-    const [r] = await db.execute<{ n: number }>(sql`select count(*)::int as n from articles`);
-    if (r.n > 0) {
-      console.log(`• seed skipped: ${r.n} articles already exist`);
+    // "Used" survives a purge: real staff sign in, real hypotheses get written, and the purge leaves a marker.
+    const [r] = await db.execute<{ articles: boolean; staff: boolean; experiments: boolean; purged: boolean }>(sql`select
+      exists(select 1 from articles) as articles,
+      exists(select 1 from staff where not is_sample) as staff,
+      exists(select 1 from experiments where not is_sample) as experiments,
+      exists(select 1 from site_settings where key = 'samples_purged') as purged`);
+    const why = Object.entries(r).filter(([, v]) => v).map(([k]) => k);
+    if (why.length) {
+      console.log(`• seed skipped: database already in use (${why.join(", ")})`);
       return;
     }
   }
@@ -106,17 +114,21 @@ async function main() {
     return;
   }
 
-  await db.transaction(async (tx) => {
+  const touched = await db.transaction(async (tx) => {
+    const before = await tx.execute<{ slug: string }>(sql`select slug from articles where is_sample`);
+    const beforeStories = await tx.execute<{ id: string }>(sql`select id from stories where is_sample`);
     await purgeSamples(tx);
 
     /* staff */
     const staffIds = new Map<string, string>();
     for (const p of STAFF) {
+      // Only sample rows are ever overwritten; a real account is never relabelled.
       const [row] = await tx
         .insert(s.staff)
         .values({ login: p.login, name: p.name, slug: p.slug, title: p.title, bio: p.bio, role: "editor", isSample: true })
-        .onConflictDoUpdate({ target: s.staff.login, set: { name: p.name, slug: p.slug, title: p.title, bio: p.bio, isSample: true } })
+        .onConflictDoUpdate({ target: s.staff.login, set: { name: p.name, slug: p.slug, title: p.title, bio: p.bio }, setWhere: sql`${s.staff.isSample}` })
         .returning({ id: s.staff.id });
+      if (!row) throw new Error(`sample login "${p.login}" belongs to a real account — rename it in seed/content/cast.ts`);
       staffIds.set(p.login, row.id);
     }
 
@@ -126,9 +138,11 @@ async function main() {
       const [row] = await tx
         .insert(s.experiments)
         .values({ ...e, status: "running", startedAt: at(60 * 24 * 14), isSample: true })
-        .onConflictDoUpdate({ target: s.experiments.code, set: { name: e.name, hypothesis: e.hypothesis, isSample: true } })
+        .onConflictDoUpdate({ target: s.experiments.code, set: { name: e.name, hypothesis: e.hypothesis }, setWhere: sql`${s.experiments.isSample}` })
         .returning({ id: s.experiments.id });
-      expIds.set(e.code, row.id);
+      // A real hypothesis owns this code: attach the samples to it without touching it.
+      const id = row?.id ?? (await tx.query.experiments.findFirst({ where: (x, { eq }) => eq(x.code, e.code), columns: { id: true } }))!.id;
+      expIds.set(e.code, id);
     }
 
     /* stories */
@@ -456,12 +470,18 @@ async function main() {
         meta: { sample: true, slug: info.slug },
       });
     }
+
+    return {
+      slugs: [...before.map((r) => r.slug), ...[...articleIds.values()].map((x) => x.slug)],
+      storyIds: [...beforeStories.map((r) => r.id), ...storyIds.values()],
+    };
   });
 
   const [c] = await db.execute<{ a: number; c: number; i: number; s: number }>(sql`select
     (select count(*) from articles)::int as a, (select count(*) from candidates)::int as c,
     (select count(*) from feed_items)::int as i, (select count(*) from feed_sources)::int as s`);
   console.log(`✓ seeded — articles ${c.a}, candidates ${c.c}, feed items ${c.i}, sources ${c.s}`);
+  await revalidateLive([...ALL_LIST_TAGS, ...touched.slugs.map(T.article), ...touched.storyIds.map(T.story)]);
 }
 
 main()

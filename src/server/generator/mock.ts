@@ -92,7 +92,8 @@ function pick<T>(arr: T[], seed: number, n: number): T[] {
   return out;
 }
 
-function sourceKind(kind: string): "filing" | "press" | "data" | "social" | "report" | "news" | "paper" {
+function sourceKind(kind: string, tier: number): "filing" | "press" | "data" | "social" | "report" | "news" | "paper" {
+  if (tier >= 3) return "social"; // community / unverified sources are never labelled primary
   if (kind === "api" || kind === "ws") return "data";
   if (kind === "press_pdf" || kind === "rss") return "press";
   if (kind === "scrape") return "social";
@@ -158,7 +159,7 @@ export const mockGenerator: DraftGenerator = {
         blocks,
         tags,
         tickers: [],
-        sources: usable.slice(0, 5).map((i) => ({ name: i.sourceName, kind: sourceKind(i.sourceKind) })),
+        sources: usable.slice(0, 5).map((i) => ({ name: i.sourceName, kind: sourceKind(i.sourceKind, i.trustTier) })),
         sentiment: null,
       },
       aiNote: notes.length ? notes.join(" · ") : null,

@@ -56,6 +56,8 @@ export function ChartBlock({ title, unit, points, source }: { title: string; uni
             if (e.key === "ArrowRight") setHover((h) => Math.min(points.length - 1, (h ?? -1) + 1));
             else if (e.key === "ArrowLeft") setHover((h) => Math.max(0, (h ?? points.length) - 1));
             else if (e.key === "Escape") setHover(null);
+            else return;
+            e.preventDefault();
           }}
         >
           <defs>

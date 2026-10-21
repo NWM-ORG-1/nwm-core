@@ -91,59 +91,63 @@ async function Article({ params }: Pick<PageProps<"/a/[slug]">, "params">) {
     ],
   };
 
+  // Only the article slides; the fixed progress bar and dock stay outside so they keep their own
+  // view-transition names and don't move with the content.
   return (
-    <ViewTransition
-      key={a.slug}
-      enter={{ next: "next", prev: "prev", open: "open", default: "none" }}
-      exit={{ next: "next", prev: "prev", open: "open", default: "none" }}
-      default="none"
-    >
-      <div className="read-progress" aria-hidden="true" />
+    <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(a) }} />
-      <div className="mx-auto max-w-[1320px] px-4 pb-32 pt-8 sm:px-6 lg:pt-12">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,280px)] xl:gap-14">
-          <aside className="hidden lg:block" aria-label="맥락">
-            <div className="sticky top-[calc(var(--header-h)+var(--ticker-h)+24px)] space-y-8">
-              {a.story && <StoryTimeline slug={a.slug} storySlug={a.story.slug} title={a.story.title} items={timeline} />}
-              <div className="text-[12.5px] leading-relaxed text-fg-4">
-                <p className="kicker mb-2 text-fg-3">{BEATS[a.beat].label}</p>
-                {BEATS[a.beat].blurb}
+      <ViewTransition
+        key={a.slug}
+        enter={{ next: "next", prev: "prev", open: "open", default: "none" }}
+        exit={{ next: "next", prev: "prev", open: "open", default: "none" }}
+        default="none"
+      >
+        <main className="mx-auto max-w-[1320px] px-4 pb-16 pt-8 sm:px-6 lg:pt-12">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,280px)] xl:gap-14">
+            <aside className="hidden lg:block" aria-label="맥락">
+              <div className="sticky top-[calc(var(--header-h)+var(--ticker-h)+24px)] space-y-8">
+                {a.story && <StoryTimeline slug={a.slug} storySlug={a.story.slug} title={a.story.title} items={timeline} />}
+                <div className="text-[12.5px] leading-relaxed text-fg-4">
+                  <p className="kicker mb-2 text-fg-3">{BEATS[a.beat].label}</p>
+                  {BEATS[a.beat].blurb}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          <div className="mx-auto w-full min-w-0 max-w-[40rem]">
-            <ReaderShell slug={a.slug} beat={a.beat} tags={a.tags} readSeconds={a.readSeconds} fallback={fallback}>
-              <ArticleView a={a} />
-            </ReaderShell>
-            <div className="mt-12">
-              <NextUp slug={a.slug} fallback={fallback} />
-            </div>
-            {a.story && timeline.length > 1 && (
-              <div className="mt-12 lg:hidden">
-                <StoryTimeline slug={a.slug} storySlug={a.story.slug} title={a.story.title} items={timeline} />
+            <div className="mx-auto w-full min-w-0 max-w-[40rem]">
+              <ReaderShell slug={a.slug} beat={a.beat} tags={a.tags} readSeconds={a.readSeconds} fallback={fallback}>
+                <ArticleView a={a} />
+              </ReaderShell>
+              <div className="mt-12">
+                <NextUp slug={a.slug} fallback={fallback} />
               </div>
-            )}
-            <div className="mt-14">
-              <RelatedList items={related.slice(0, 6)} />
+              {a.story && timeline.length > 1 && (
+                <div className="mt-12 lg:hidden">
+                  <StoryTimeline slug={a.slug} storySlug={a.story.slug} title={a.story.title} items={timeline} />
+                </div>
+              )}
+              <div className="mt-14">
+                <RelatedList items={related.slice(0, 6)} />
+              </div>
             </div>
+
+            <aside className="hidden lg:block" aria-label="읽기 큐">
+              <div className="sticky top-[calc(var(--header-h)+var(--ticker-h)+24px)]">
+                <QueueRail slug={a.slug} fallback={fallback} />
+              </div>
+            </aside>
           </div>
-
-          <aside className="hidden lg:block" aria-label="읽기 큐">
-            <div className="sticky top-[calc(var(--header-h)+var(--ticker-h)+24px)]">
-              <QueueRail slug={a.slug} fallback={fallback} />
-            </div>
-          </aside>
-        </div>
-      </div>
+        </main>
+      </ViewTransition>
+      <div className="read-progress" aria-hidden="true" />
       <ReaderDock slug={a.slug} fallback={fallback} />
-    </ViewTransition>
+    </>
   );
 }
 
 function ArticleSkeleton() {
   return (
-    <div className="mx-auto max-w-[40rem] px-4 pt-12" aria-busy="true" aria-label="기사를 불러오는 중">
+    <main className="mx-auto max-w-[40rem] px-4 pt-12" aria-busy="true" aria-label="기사를 불러오는 중">
       <div className="skeleton h-4 w-32" />
       <div className="skeleton mt-5 h-10 w-full" />
       <div className="skeleton mt-3 h-10 w-4/5" />
@@ -153,6 +157,6 @@ function ArticleSkeleton() {
           <div key={i} className="skeleton h-4 w-full" />
         ))}
       </div>
-    </div>
+    </main>
   );
 }

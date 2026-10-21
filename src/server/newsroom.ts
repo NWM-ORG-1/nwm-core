@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import {
   articleRevisions,
@@ -24,6 +24,11 @@ import { newArticleSlug } from "./slug";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 type Q = DB | Tx;
+
+/** Accounts auto-provisioned on first login (auth.ts) until the editor names themselves. */
+export function isPlaceholderStaff(s: { name: string; slug: string }) {
+  return s.name === "편집국" && /^editor-[0-9a-f]{8}$/.test(s.slug);
+}
 
 export class NewsroomError extends Error {
   constructor(
@@ -150,7 +155,7 @@ export async function computeChecks(q: Q, candidateId: string, editorName: strin
   const items = await loadCandidateItems(q, candidateId);
   return runChecks({
     draft: cand.draft,
-    mode: cand.mode,
+    mode: effectiveMode(cand),
     items: items.map(toCheckItem),
     recentTitles: await recentTitles(q),
     previous: cand.checks,
@@ -171,10 +176,25 @@ export async function refreshStoryStats(q: Q, storyId: string | null | undefined
 
 /* ───────────────────────────── publish ───────────────────────────── */
 
-export function aiInvolvementFor(mode: string, usedGenerator: boolean): AiInvolvement {
-  if (mode === "data_auto") return "auto";
-  if (mode === "feed_draft") return "ai_draft_edited";
-  return usedGenerator ? "ai_assisted" : "human";
+/** Only untouched code-template output may be labelled "자동 생성 · 데이터 기반". */
+export function isTemplateAuto(c: { mode: string; generator: { id: string } | null }) {
+  return c.mode === "data_auto" && Boolean(c.generator?.id.startsWith("template:"));
+}
+
+/** Mode used for checks: a data_auto candidate that is not template output is treated as an AI draft. */
+export function effectiveMode(c: { mode: CandidateRow["mode"]; generator: { id: string } | null }): CandidateRow["mode"] {
+  if (c.mode === "data_auto" && !isTemplateAuto(c)) return "feed_draft";
+  return c.mode;
+}
+
+type CandidateRow = typeof candidates.$inferSelect;
+
+/** AI involvement shown to readers, derived from how the draft was actually produced. */
+export function aiInvolvementFor(c: { mode: string; generator: { id: string } | null }): AiInvolvement {
+  if (isTemplateAuto(c)) return "auto";
+  if (c.generator == null) return "human";
+  if (c.mode === "editor_idea") return "ai_assisted";
+  return "ai_draft_edited";
 }
 
 export interface PublishResult {
@@ -200,14 +220,32 @@ const strictDraft = draftSchema.superRefine((d, ctx) => {
  */
 export async function publishCandidate(
   db: DB,
-  opts: { candidateId: string; editorId: string | null; actorId: string | null; overrideReason?: string; now?: Date },
-): Promise<PublishResult> {
+  opts: {
+    candidateId: string;
+    editorId: string | null;
+    actorId: string | null;
+    overrideReason?: string;
+    now?: Date;
+    /** the draft version the editor reviewed; publishing anything else is refused */
+    expectedLockVersion?: number;
+    /** set by the scheduler: only publish if still scheduled and due, as the editor who scheduled it */
+    scheduledDue?: Date;
+  },
+): Promise<PublishResult | null> {
   return db.transaction(async (tx) => {
     const [cand] = await tx.select().from(candidates).where(eq(candidates.id, opts.candidateId)).for("update");
     if (!cand) throw new NewsroomError("후보를 찾을 수 없습니다.", "not_found");
-    if (cand.status === "published" || cand.status === "rejected") {
-      throw new NewsroomError(`이미 ${cand.status === "published" ? "발행된" : "반려된"} 후보입니다.`, "state");
+    if (cand.status === "published" || cand.articleId) throw new NewsroomError("이미 발행된 후보입니다.", "state");
+    if (cand.status === "rejected") throw new NewsroomError("반려된 후보입니다.", "state");
+    if (opts.scheduledDue) {
+      // re-check under the row lock: it may have been unscheduled or moved since the scheduler's read
+      if (cand.status !== "scheduled" || !cand.scheduledAt || cand.scheduledAt > opts.scheduledDue) return null;
     }
+    if (opts.expectedLockVersion != null && cand.lockVersion !== opts.expectedLockVersion) {
+      throw new NewsroomError("다른 편집자가 초안을 바꿨습니다. 새로고침해 바뀐 내용을 검토한 뒤 다시 발행하세요.", "conflict");
+    }
+    const editorId = opts.scheduledDue ? cand.scheduledById : opts.editorId;
+    const actorId = opts.scheduledDue ? cand.scheduledById : opts.actorId;
 
     const parsed = strictDraft.safeParse(cand.draft);
     if (!parsed.success) {
@@ -215,9 +253,13 @@ export async function publishCandidate(
     }
     const draft: Draft = parsed.data;
 
-    const isAuto = cand.mode === "data_auto";
-    const editor = opts.editorId ? await tx.query.staff.findFirst({ where: eq(staff.id, opts.editorId) }) : null;
+    const isAuto = isTemplateAuto(cand);
+    const editor = editorId ? await tx.query.staff.findFirst({ where: eq(staff.id, editorId) }) : null;
+    if (editor && !editor.active) throw new NewsroomError("책임 편집자 계정이 비활성화되어 발행할 수 없습니다.", "invalid");
     if (!isAuto && !editor) throw new NewsroomError("AI 초안·보조 기사는 책임 편집자가 필요합니다.", "invalid");
+    // A first-login account is "편집국" until the editor sets a real name; it can't sign an AI article.
+    if (!isAuto && editor && isPlaceholderStaff(editor))
+      throw new NewsroomError("책임 편집자의 실명이 아직 없습니다. 설정 → ‘내 편집자 프로필’에서 이름을 입력한 뒤 발행하세요.", "invalid");
 
     let checks = await computeChecks(tx, cand.id, editor?.name ?? null);
     const failing = blockingFailures(checks);
@@ -230,7 +272,7 @@ export async function publishCandidate(
     }
 
     const now = opts.now ?? new Date();
-    const aiInvolvement = aiInvolvementFor(cand.mode, cand.generator != null);
+    const aiInvolvement = aiInvolvementFor(cand);
     const beatLabel = BEATS[cand.beat].label;
     const byline =
       aiInvolvement === "auto"
@@ -289,7 +331,7 @@ export async function publishCandidate(
     await refreshStoryStats(tx, cand.storyId);
 
     await logActivity(tx, {
-      actorId: opts.actorId,
+      actorId,
       kind: "publish",
       entityType: "article",
       entityId: article.id,
@@ -297,7 +339,8 @@ export async function publishCandidate(
       meta: { slug, candidateId: cand.id, aiInvolvement, override: opts.overrideReason ?? null },
     });
 
-    const tags = [T.feed, T.article(slug), T.editors, T.rel];
+    // `rel` (related rails on other article pages) is refreshed in the background by the caller
+    const tags = [T.feed, T.article(slug), T.editors];
     const paths = ["/", BEATS[cand.beat].path, "/latest", `/a/${slug}`, `/d/${ymdKST(now)}`];
     if (cand.storyId) {
       tags.push(T.story(cand.storyId));
@@ -311,20 +354,22 @@ export async function publishCandidate(
 /** Scheduled candidates whose time has come. Row locks make concurrent runners safe. */
 export async function publishDue(db: DB, now = new Date()): Promise<PublishResult[]> {
   const due = await db
-    .select({ id: candidates.id, scheduledById: candidates.scheduledById })
+    .select({ id: candidates.id })
     .from(candidates)
-    .where(and(eq(candidates.status, "scheduled"), sql`${candidates.scheduledAt} <= ${now}`))
+    .where(and(eq(candidates.status, "scheduled"), lte(candidates.scheduledAt, now)))
     .limit(20);
   const results: PublishResult[] = [];
   for (const d of due) {
     try {
-      results.push(await publishCandidate(db, { candidateId: d.id, editorId: d.scheduledById, actorId: d.scheduledById, now }));
+      const r = await publishCandidate(db, { candidateId: d.id, editorId: null, actorId: null, now, scheduledDue: now });
+      if (r) results.push(r);
     } catch (err) {
+      if (err instanceof NewsroomError && err.code === "state") continue; // published/rejected meanwhile
       console.error("[scheduler] publish failed", d.id, err);
       await db
         .update(candidates)
-        .set({ status: "review", aiNote: `예약 발행 실패: ${(err as Error).message}`.slice(0, 500), updatedAt: now })
-        .where(eq(candidates.id, d.id));
+        .set({ status: "review", scheduledAt: null, aiNote: `예약 발행 실패: ${(err as Error).message}`.slice(0, 500), updatedAt: now })
+        .where(and(eq(candidates.id, d.id), eq(candidates.status, "scheduled")));
     }
   }
   return results;

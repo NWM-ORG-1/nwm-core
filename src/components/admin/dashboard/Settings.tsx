@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
-import { getSettingsAdmin } from "@/data/admin";
+import { getMyProfile, getSettingsAdmin } from "@/data/admin";
 import { getOpsChecklist, type CheckState } from "@/data/admin-dashboard";
 import { Icon } from "@/components/ui/Icon";
 import { LEGAL_DEFAULTS, LEGAL_FIELDS, PENDING } from "@/lib/site";
 import { cx } from "../ui";
 import { LegalForm, type LegalFieldView } from "./LegalForm";
+import { ProfileForm } from "./ProfileForm";
 
 export async function SettingsBody() {
-  const [settings, ops] = await Promise.all([getSettingsAdmin(), getOpsChecklist()]);
+  const [settings, ops, me] = await Promise.all([getSettingsAdmin(), getOpsChecklist(), getMyProfile()]);
   const fields: LegalFieldView[] = LEGAL_FIELDS.map((f) => ({
     key: f.key,
     label: f.label,
@@ -60,7 +61,10 @@ export async function SettingsBody() {
 
   return (
     <div className="grid items-start gap-4 px-6 py-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
-      <LegalForm fields={fields} />
+      <div className="min-w-0 space-y-4">
+        <ProfileForm me={me} />
+        <LegalForm fields={fields} />
+      </div>
 
       <section className="panel overflow-hidden xl:sticky xl:top-6" aria-labelledby="ops-title">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">

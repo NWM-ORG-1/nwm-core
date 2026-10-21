@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getArchiveDays, getDay } from "@/data/public";
-import { dateKST } from "@/lib/format";
+import { dateKST, isYmd } from "@/lib/format";
 import { RiverClient } from "@/components/feed/RiverClient";
 import { toMini } from "@/components/feed/types";
 
@@ -14,7 +14,10 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps<"/d/[date]">): Promise<Metadata> {
   const { date } = await params;
-  return { title: `${date} 기사`, alternates: { canonical: `/d/${date}` } };
+  if (!isYmd(date)) return { title: "페이지를 찾을 수 없습니다", robots: { index: false } };
+  // An empty day is a valid page (today before the first publish) but not worth indexing.
+  const cards = await getDay(date);
+  return { title: `${date} 기사`, alternates: { canonical: `/d/${date}` }, robots: cards.length ? undefined : { index: false } };
 }
 
 export default function DayPage({ params }: PageProps<"/d/[date]">) {
@@ -27,7 +30,7 @@ export default function DayPage({ params }: PageProps<"/d/[date]">) {
 
 async function Day({ params }: Pick<PageProps<"/d/[date]">, "params">) {
   const { date } = await params;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) notFound();
+  if (!isYmd(date)) notFound();
   const [cards, days] = await Promise.all([getDay(date), getArchiveDays(60)]);
   const i = days.indexOf(date);
   const newer = i > 0 ? days[i - 1] : null;
@@ -50,7 +53,7 @@ async function Day({ params }: Pick<PageProps<"/d/[date]">, "params">) {
         )}
       </nav>
       <div className="mt-8">
-        {cards.length ? <RiverClient cards={cards.map(toMini)} ctx={`day:${date}`} label={date} dayHeaders={false} /> : <p className="py-16 text-center text-fg-3">이날 발행된 기사가 없습니다.</p>}
+        {cards.length ? <RiverClient cards={cards.map(toMini)} ctx={`day:${date}`} label={date} dayHeaders={false} headingLevel={2} /> : <p className="py-16 text-center text-fg-3">이날 발행된 기사가 없습니다.</p>}
       </div>
     </main>
   );

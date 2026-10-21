@@ -12,7 +12,7 @@ export function ExperimentAside({
   experiment,
   sources,
 }: {
-  experiment: { id: string; code: string; startedAt: string | null; endedAt: string | null; createdAt: string } | null;
+  experiment: { id: string; code: string; status: string; startedAt: string | null; endedAt: string | null; createdAt: string } | null;
   sources: Array<{ id: string; name: string; slug: string; status: SourceStatus }>;
 }) {
   if (!experiment) {
@@ -75,7 +75,9 @@ export function ExperimentAside({
           <dt className="text-fg-3">시작</dt>
           <dd className="tabular text-fg-2">{experiment.startedAt ? dateTimeKST(experiment.startedAt) : "—"}</dd>
           <dt className="text-fg-3">종료</dt>
-          <dd className="tabular text-fg-2">{experiment.endedAt ? dateTimeKST(experiment.endedAt) : "진행 중"}</dd>
+          <dd className="tabular text-fg-2">
+            {experiment.endedAt ? dateTimeKST(experiment.endedAt) : experiment.status === "running" ? "진행 중" : experiment.status === "paused" ? "— (일시중지)" : "—"}
+          </dd>
         </dl>
         <Link
           href={`/admin/feeds?status=all&experiment=${experiment.code}`}

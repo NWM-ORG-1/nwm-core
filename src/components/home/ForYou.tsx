@@ -22,7 +22,9 @@ export function ForYou({ pool }: { pool: MiniCard[] }) {
   const picks = useMemo(() => {
     const rankable = pool.map((c) => ({ ...c, slug: c.s, beat: c.b, tags: c.tg, publishedAt: c.p, views: c.v }));
     if (!mounted) return [...rankable].sort((a, b) => b.views - a.views).slice(0, 6);
-    return personalRank(rankable, history, Date.now(), 6);
+    // Recency is measured from the newest article in the pool, which keeps render pure.
+    const now = Math.max(...rankable.map((c) => Date.parse(c.publishedAt)));
+    return personalRank(rankable, history, now, 6);
   }, [pool, history, mounted]);
 
   return (

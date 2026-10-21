@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getInbox, type InboxFilters as Filters } from "@/data/admin";
+import { getInboxCounts } from "@/data/admin-feeds";
 import { btn, cx, EmptyState, PageHeader, TabLinks } from "@/components/admin/ui";
 import { InboxFilters, type InboxFilterValues } from "@/components/admin/feeds/InboxFilters";
 import { InboxTable } from "@/components/admin/feeds/InboxTable";
@@ -66,22 +67,24 @@ export default function FeedsPage({ searchParams }: PageProps<"/admin/feeds">) {
 
 async function Inbox({ searchParams }: { searchParams: Promise<SP> }) {
   const { values, filters, status } = parse(await searchParams);
-  const data = await getInbox(filters);
-  const total = (data.counts.new ?? 0) + (data.counts.promoted ?? 0) + (data.counts.dismissed ?? 0);
+  const filtered = Boolean(values.source || values.experiment || values.beat || values.minScore || values.q);
+  // Tab counts follow the active filters; getInbox's own counts are global.
+  const [data, filteredCounts] = await Promise.all([getInbox(filters), filtered ? getInboxCounts(filters) : null]);
+  const counts = filteredCounts ?? data.counts;
+  const total = (counts.new ?? 0) + (counts.promoted ?? 0) + (counts.dismissed ?? 0);
   const keep = { source: values.source, experiment: values.experiment, beat: values.beat, minScore: values.minScore, q: values.q };
   const tabs = (["new", "promoted", "dismissed", "all"] as const).map((k) => ({
     key: k,
     label: INBOX_STATUS_LABEL[k],
-    count: k === "all" ? total : (data.counts[k] ?? 0),
+    count: k === "all" ? total : (counts[k] ?? 0),
     href: inboxHref(keep, { status: k === "new" ? undefined : k }),
   }));
-  const filtered = Boolean(values.source || values.experiment || values.beat || values.minScore || values.q);
 
   return (
     <div className="space-y-4 px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TabLinks tabs={tabs} active={status} />
-        <p className="text-[12px] text-fg-3">탭 숫자는 필터와 무관한 전체 건수입니다.</p>
+        {filtered && <p className="text-[12px] text-fg-3">탭 숫자는 현재 필터를 적용한 건수입니다.</p>}
       </div>
       <InboxFilters values={values} sources={data.facets.sources} experiments={data.facets.experiments} />
       {data.items.length === 0 ? (

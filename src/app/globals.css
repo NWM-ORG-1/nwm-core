@@ -22,8 +22,8 @@
 
   --fg: #e8eef9;
   --fg-2: #b3bdd1; /* body copy ≈ 10.5:1 */
-  --fg-3: #7b869c; /* meta ≈ 5:1 */
-  --fg-4: #4f5870; /* decorative only */
+  --fg-3: #8a95ab; /* meta ≈ 6.7:1 */
+  --fg-4: #737e94; /* tertiary meta ≥ 4.5:1 on bg / bg-1 / bg-2 */
 
   --ice: #9ec5ff;
   --ice-2: #d6e7ff;
@@ -71,8 +71,8 @@
 
   --fg: #121830;
   --fg-2: #333d5c;
-  --fg-3: #5b6585;
-  --fg-4: #959db6;
+  --fg-3: #4f5978;
+  --fg-4: #646d8b;
 
   --ice: #3a5fd6;
   --ice-2: #2443ad;
@@ -81,18 +81,18 @@
   --grad-ice: linear-gradient(100deg, #2b4fd0 0%, #4a6fe6 50%, #7d97f2 100%);
   --grad-ice-soft: linear-gradient(100deg, #2b4fd0 0%, #5d7ff0 100%);
 
-  --live: #e0256f;
-  --up: #d62f3d;
+  --live: #c41d5f;
+  --up: #c4283a;
   --down: #2c66d8;
-  --flat: #6b7390;
-  --good: #128a57;
-  --warn: #b77a00;
+  --flat: #5f6784;
+  --good: #0f7a4c;
+  --warn: #8a5c00;
   --bad: #d2213f;
 
   --beat-ai: #5d55d6;
-  --beat-crypto: #a86a10;
-  --beat-economy: #13895a;
-  --beat-tech: #1878a8;
+  --beat-crypto: #8f5a0c;
+  --beat-economy: #0f7a50;
+  --beat-tech: #146e9c;
   --beat-sentiment: #bd3f7c;
 
   --shadow-pop: 0 18px 50px -24px rgb(30 40 90 / 0.35), 0 0 0 1px var(--line-2);
@@ -166,9 +166,12 @@ body {
   border-radius: 6px;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* In the base layer so `text-*` utilities on links (e.g. `bg-ice text-bg` buttons) win. */
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* ─────────────────────────── utilities ─────────────────────────── */
@@ -343,7 +346,9 @@ a {
 .animate-marquee {
   animation: marquee var(--marquee-duration, 80s) linear infinite;
 }
-.animate-marquee:hover {
+.animate-marquee:hover,
+.animate-marquee[data-paused],
+[role="region"]:focus-within > .animate-marquee {
   animation-play-state: paused;
 }
 .animate-pulse-dot {
@@ -464,8 +469,8 @@ a {
 /* ───────────────────────── reading ───────────────────────── */
 
 /* Read state set on list rows by the client store. */
-[data-read="true"] .read-dim {
-  opacity: 0.5;
+[data-read="true"] .read-dim :is(h2, h3) {
+  color: var(--fg-3);
 }
 
 .prose-nwm {
@@ -497,6 +502,11 @@ a {
 
 .measure {
   max-width: 36em;
+}
+
+/* The fixed ReaderDock (h-16 + border + safe area) would otherwise cover the footer's bottom bar. */
+body:has([data-reader-dock]) footer {
+  padding-bottom: calc(4rem + 1px + env(safe-area-inset-bottom));
 }
 
 /* Hide the "JS-only" affordances until hydration. */

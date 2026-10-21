@@ -44,7 +44,7 @@ async function Editor({ params }: Pick<PageProps<"/editors/[slug]">, "params">) 
       {person.bio && <p className="mt-5 text-[15.5px] leading-relaxed text-fg-2">{person.bio}</p>}
       <p className="mt-3 text-[13px] text-fg-4">편집·검수한 기사 {articles.length}건 — NWM의 AI 초안·보조 기사는 모두 이름이 표시된 편집자가 책임집니다.</p>
       <div className="mt-8">
-        <RiverClient cards={articles.map(toMini)} ctx={`editor:${slug}`} label={`${person.name} 편집`} />
+        <RiverClient cards={articles.map(toMini)} ctx={`editor:${slug}`} label={`${person.name} 편집`} headingLevel={2} />
       </div>
     </main>
   );

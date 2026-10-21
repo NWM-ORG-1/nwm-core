@@ -6,6 +6,14 @@ export function invalidateFromAction(tags: Iterable<string>) {
   for (const t of new Set(tags)) updateTag(t);
 }
 
+/**
+ * Background refresh: stale content keeps being served while it re-renders.
+ * Used for related-article rails after a publish (not urgent, touches every article page).
+ */
+export function refreshInBackground(tags: Iterable<string>) {
+  for (const t of new Set(tags)) revalidateTag(t, "max");
+}
+
 /** From a Route Handler (scheduler, workers): `updateTag` is action-only. */
 export function invalidateFromRoute(tags: Iterable<string>) {
   for (const t of new Set(tags)) revalidateTag(t, { expire: 0 });

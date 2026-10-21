@@ -46,12 +46,20 @@ export function Ago({ iso, className }: { iso: string | null; className?: string
 }
 
 /** "14:05 · 3분 전" for today (KST); "10.19 14:05 · 2일 전" otherwise. */
-export function Stamp({ iso }: { iso: string }) {
+export function Stamp({ iso, inline = false }: { iso: string; inline?: boolean }) {
   const t = useNow();
   const today = t ? ymdKST(new Date(t)) : null;
   const day = ymdKST(iso);
   const clock = clockKST(iso);
   const abs = today && day !== today ? `${day.slice(5).replace("-", ".")} ${clock}` : clock;
+  if (inline) {
+    return (
+      <time dateTime={iso} title={dateTimeKST(iso)} className="tabular whitespace-nowrap text-[11.5px] text-fg-3" suppressHydrationWarning>
+        <span className="font-mono text-fg-2">{abs}</span>
+        {t ? ` · ${relTime(iso, t)}` : ""}
+      </time>
+    );
+  }
   return (
     <time dateTime={iso} title={dateTimeKST(iso)} className="flex flex-col leading-tight" suppressHydrationWarning>
       <span className="tabular font-mono text-[12px] text-fg-2">{abs}</span>

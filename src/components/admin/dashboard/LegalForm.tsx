@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useState, type FormEvent } from "react";
+import { PENDING, SITE } from "@/lib/site";
 import { saveLegal } from "@/server/actions/settings";
 import { ActionMessage } from "../client";
 import { Badge, btn, cx } from "../ui";
@@ -18,8 +19,6 @@ export interface LegalFieldView {
   fallback: string;
 }
 
-const PENDING = "등록 예정";
-
 /** 법정 표기 editor. Environment overrides are shown read-only; their saved values are kept untouched. */
 export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
   const [state, formAction, pending] = useActionState(saveLegal, null);
@@ -30,6 +29,8 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
   const effective = (f: LegalFieldView) => f.envValue ?? ((values[f.key] ?? "").trim() || f.fallback);
   const sourceOf = (f: LegalFieldView) => (f.envValue ? "env" : (values[f.key] ?? "").trim() ? "db" : "default");
   const pendingCount = fields.filter((f) => effective(f) === PENDING).length;
+  const emailField = fields.find((f) => f.key === "email");
+  const foundedField = fields.find((f) => f.key === "foundedAt");
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,8 +49,8 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
         </div>
 
         <p className="border-b border-line px-4 py-3 text-[12.5px] leading-relaxed text-fg-3">
-          신문 등의 진흥에 관한 법률 제9조의2에 따라 인터넷신문은 제호·등록번호·등록일·발행인·편집인·발행소·청소년보호책임자를 모든 페이지에서 볼 수 있게
-          표시해야 합니다. 저장하면 공개 사이트 하단에 바로 반영됩니다. 적용 순서는 <span className="text-fg-2">환경변수 → 저장값 → 기본값</span>입니다.
+          인터넷신문은 신문법에 따라 제호·등록번호·등록일·발행인·편집인·발행소·청소년보호책임자를 독자가 볼 수 있게 표시해야 합니다. 저장하면 공개
+          사이트 하단 ‘발행 정보’에 바로 반영됩니다. 적용 순서는 <span className="text-fg-2">환경변수 → 저장값 → 기본값</span>입니다.
         </p>
 
         <div className="grid gap-x-5 gap-y-4 p-4 md:grid-cols-2">
@@ -139,20 +140,31 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
           </h2>
           <span className="text-[11.5px] text-fg-3">사이트 하단 ‘발행 정보’</span>
         </div>
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-1.5 px-4 py-4 text-[12.5px] leading-relaxed">
-          {fields.map((f) => {
-            const v = effective(f);
-            return (
-              <div key={f.key} className="contents">
-                <dt className="text-fg-3">{f.label}</dt>
-                <dd className={cx("min-w-0 break-words", v === PENDING ? "text-fg-4" : "text-fg-2")}>
-                  {v}
-                  {f.envValue && <span className="hud ml-2 text-[9.5px] text-ice">ENV</span>}
-                </dd>
-              </div>
-            );
-          })}
-        </dl>
+        <div className="px-4 py-4">
+          <p className="kicker mb-3 text-fg-4">발행 정보</p>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-1.5 text-[12.5px] leading-relaxed">
+            {fields
+              .filter((f) => f.key !== "email")
+              .map((f) => {
+                const v = effective(f);
+                return (
+                  <div key={f.key} className="contents">
+                    <dt className="text-fg-4">{f.label}</dt>
+                    <dd className={cx("min-w-0 break-words", v === PENDING ? "text-fg-4" : "text-fg-2")}>
+                      {v}
+                      {f.envValue && <span className="hud ml-2 text-[9.5px] text-ice">ENV</span>}
+                    </dd>
+                  </div>
+                );
+              })}
+          </dl>
+          <p className="mt-4 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-3 text-[12px] text-fg-4">
+            <span className="break-all text-fg-3">{emailField ? effective(emailField) : SITE.email}</span>
+            <span>
+              © {foundedField ? effective(foundedField) : ""} {SITE.nameEn}
+            </span>
+          </p>
+        </div>
       </section>
     </div>
   );

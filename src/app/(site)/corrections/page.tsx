@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCorrectionsLog } from "@/data/public";
+import { QueueScope } from "@/components/feed/QueueScope";
 import { BEATS } from "@/lib/beats";
 import { dateTimeKST } from "@/lib/format";
 
@@ -10,6 +11,9 @@ const KIND: Record<string, string> = { correction: "정정", clarification: "바
 
 export default async function CorrectionsPage() {
   const rows = await getCorrectionsLog();
+  // One article can carry several corrections; the reading queue lists it once.
+  const seen = new Set<string>();
+  const queue = rows.filter((r) => !seen.has(r.slug) && seen.add(r.slug)).map((r) => ({ s: r.slug, t: r.title, b: r.beat }));
   return (
     <main className="mx-auto max-w-3xl px-4 pb-10 pt-12 sm:px-6">
       <p className="hud text-ice">TRANSPARENCY</p>
@@ -20,25 +24,27 @@ export default async function CorrectionsPage() {
           정정·반론 신청 →
         </Link>
       </p>
-      <ol className="mt-10 space-y-4">
-        {rows.map((r, i) => (
-          <li key={i} className="panel p-5">
-            <p className="flex flex-wrap items-center gap-2 text-[12px] text-fg-3">
-              <span className="kicker rounded border border-warn/40 px-1.5 text-warn">{KIND[r.kind]}</span>
-              <span>{BEATS[r.beat].label}</span>
-              <span aria-hidden="true">·</span>
-              <span>{dateTimeKST(r.publishedAt)}</span>
-              <span aria-hidden="true">·</span>
-              <span>r{r.revision}</span>
-            </p>
-            <Link href={`/a/${r.slug}`} className="mt-2 block text-[17px] font-bold leading-snug text-fg hover:text-ice-2">
-              {r.title}
-            </Link>
-            <p className="mt-1.5 text-[14.5px] leading-relaxed text-fg-2">{r.note}</p>
-          </li>
-        ))}
-        {rows.length === 0 && <li className="py-16 text-center text-fg-3">아직 정정 기록이 없습니다.</li>}
-      </ol>
+      <QueueScope ctx="corrections" label="정정 기록" items={queue}>
+        <ol className="mt-10 space-y-4">
+          {rows.map((r, i) => (
+            <li key={i} className="panel p-5">
+              <p className="flex flex-wrap items-center gap-2 text-[12px] text-fg-3">
+                <span className="kicker rounded border border-warn/40 px-1.5 text-warn">{KIND[r.kind]}</span>
+                <span>{BEATS[r.beat].label}</span>
+                <span aria-hidden="true">·</span>
+                <span>{dateTimeKST(r.publishedAt)}</span>
+                <span aria-hidden="true">·</span>
+                <span>r{r.revision}</span>
+              </p>
+              <Link href={`/a/${r.slug}`} className="mt-2 block text-[17px] font-bold leading-snug text-fg hover:text-ice-2">
+                {r.title}
+              </Link>
+              <p className="mt-1.5 text-[14.5px] leading-relaxed text-fg-2">{r.note}</p>
+            </li>
+          ))}
+          {rows.length === 0 && <li className="py-16 text-center text-fg-3">아직 정정 기록이 없습니다.</li>}
+        </ol>
+      </QueueScope>
     </main>
   );
 }

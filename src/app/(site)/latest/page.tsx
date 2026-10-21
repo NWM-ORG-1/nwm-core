@@ -16,7 +16,7 @@ export default async function LatestPage() {
           <h1 className="mt-3 text-[34px] font-extrabold tracking-[-0.035em] text-fg">최신 기사</h1>
           <p className="mt-2 text-[15px] text-fg-3">발행된 모든 기사를 시간순으로 봅니다. J/K로 이동, Enter로 열기.</p>
           <div className="mt-8">
-            <RiverClient cards={cards.map(toMini)} ctx="latest" label="최신 기사" live filterable />
+            <RiverClient cards={cards.map(toMini)} ctx="latest" label="최신 기사" live filterable headingLevel={2} />
           </div>
         </div>
         <aside className="lg:col-span-4">

@@ -69,12 +69,14 @@ async function SourcesBody() {
         <Tile label="수집 오류" value={errors} tone={errors ? "bad" : undefined} sub={errors ? "아래 목록에서 원인을 확인하세요" : "모든 소스 정상"} />
         <Tile label="24시간 수집" value={`${items24h.toLocaleString("ko-KR")}건`} sub={`7일 ${items7d.toLocaleString("ko-KR")}건`} />
         <Tile label="7일 승격률" value={rate(promoted7d, items7d)} sub={`${promoted7d}건 승격 / ${items7d}건 수집`} />
-        <Tile
-          label="라이선스 미검토"
-          value={unreviewed}
-          tone={unreviewed ? "warn" : undefined}
-          sub={signalOnly ? `신호 전용 소스 ${signalOnly}개 별도` : "신호 전용 소스 없음"}
-        />
+        <div className="max-md:col-span-2 [&>*]:h-full">
+          <Tile
+            label="라이선스 미검토"
+            value={unreviewed}
+            tone={unreviewed ? "warn" : undefined}
+            sub={signalOnly ? `신호 전용 소스 ${signalOnly}개 별도` : "신호 전용 소스 없음"}
+          />
+        </div>
       </div>
 
       <aside className="flex gap-3 rounded-xl border border-line bg-bg-1/50 px-4 py-3 text-[12.5px] leading-relaxed text-fg-3">
@@ -123,11 +125,12 @@ async function SourcesBody() {
 }
 
 const cell = "border-b border-line px-3 py-3 align-top xl:table-cell max-xl:border-0 max-xl:p-0";
+const statCol = "max-xl:col-span-2 sm:max-xl:col-span-4 xl:text-right";
 const label = "max-xl:before:mb-1 max-xl:before:block max-xl:before:text-[11.5px] max-xl:before:font-semibold max-xl:before:text-fg-3 max-xl:before:content-[attr(data-label)]";
 
 function SourceTable({ rows, accent }: { rows: Source[]; accent: string }) {
   return (
-    <div className="panel overflow-hidden" style={{ borderTop: `2px solid color-mix(in srgb, ${accent} 70%, transparent)` }}>
+    <div className="panel relative overflow-hidden" style={{ borderTop: `2px solid color-mix(in srgb, ${accent} 70%, transparent)` }}>
       <table className="w-full border-collapse text-left text-[13px] max-xl:block xl:table-fixed">
         <thead className="max-xl:hidden">
           <tr>
@@ -154,11 +157,11 @@ function SourceTable({ rows, accent }: { rows: Source[]; accent: string }) {
               <tr
                 key={s.id}
                 className={cx(
-                  "transition-colors max-xl:grid max-xl:grid-cols-2 max-xl:gap-x-4 max-xl:gap-y-3 max-xl:border-b max-xl:border-line max-xl:px-4 max-xl:py-4 max-xl:last:border-b-0 sm:max-xl:grid-cols-4",
+                  "transition-colors max-xl:grid max-xl:grid-cols-6 max-xl:gap-x-4 max-xl:gap-y-3.5 max-xl:border-b max-xl:border-line max-xl:px-4 max-xl:py-4 max-xl:last:border-b-0 sm:max-xl:grid-cols-12",
                   s.status === "error" ? "bg-bad/[0.035]" : "hover:bg-bg-2/50",
                 )}
               >
-                <td className={cx(cell, "max-xl:col-span-full")}>
+                <td className={cx(cell, "max-xl:col-span-6 sm:max-xl:col-span-12")}>
                   <div className="flex min-w-0 items-baseline gap-2">
                     <Link href={`/admin/sources/${s.id}`} className="truncate text-[14px] font-semibold text-fg hover:text-ice-2">
                       {s.name}
@@ -184,16 +187,16 @@ function SourceTable({ rows, accent }: { rows: Source[]; accent: string }) {
                     </p>
                   )}
                 </td>
-                <td className={cx(cell, label, "max-xl:col-span-1")} data-label="수집">
+                <td className={cx(cell, label, "max-xl:col-span-3")} data-label="수집">
                   <SourceStatusToggle id={s.id} name={s.name} status={s.status as "active" | "paused" | "error"} />
                 </td>
-                <td className={cx(cell, label)} data-label="주기 · 최근 수집">
+                <td className={cx(cell, label, "max-xl:col-span-3")} data-label="주기 · 최근 수집">
                   <p className="tabular text-[12.5px] text-fg-2">{formatInterval(s.pollIntervalSec)}마다</p>
                   <p className="mt-0.5 text-[11.5px] text-fg-3">
                     <Ago iso={s.lastFetchedAt} />
                   </p>
                 </td>
-                <td className={cx(cell, label, "max-xl:col-span-2")} data-label="신뢰 · 이용 조건">
+                <td className={cx(cell, label, "max-xl:col-span-6")} data-label="신뢰 · 이용 조건">
                   <div className="flex flex-col items-start gap-1.5">
                     <TrustBadge tier={s.trustTier} />
                     <LicenseIcons
@@ -215,10 +218,10 @@ function SourceTable({ rows, accent }: { rows: Source[]; accent: string }) {
                     )}
                   </div>
                 </td>
-                <td className={cx(cell, label, "xl:text-right")} data-label="24시간 수집">
+                <td className={cx(cell, label, statCol)} data-label="24시간 수집">
                   <span className="tabular font-mono text-[13px] text-fg">{s.stats.items24h}</span>
                 </td>
-                <td className={cx(cell, label, "xl:text-right")} data-label="7일 승격률">
+                <td className={cx(cell, label, statCol)} data-label="7일 승격률">
                   <span className="tabular font-mono text-[13px] text-fg" title={`${s.stats.promoted7d}건 승격 / ${s.stats.items7d}건 수집`}>
                     {rate(s.stats.promoted7d, s.stats.items7d)}
                   </span>
@@ -229,7 +232,7 @@ function SourceTable({ rows, accent }: { rows: Source[]; accent: string }) {
                     {s.stats.promoted7d}/{s.stats.items7d}
                   </span>
                 </td>
-                <td className={cx(cell, label, "xl:text-right")} data-label="7일 발행 기여">
+                <td className={cx(cell, label, statCol)} data-label="7일 발행 기여">
                   <span className="tabular font-mono text-[13px] text-fg">{s.stats.published7d}</span>
                   <span className="text-[11.5px] text-fg-3">건</span>
                 </td>

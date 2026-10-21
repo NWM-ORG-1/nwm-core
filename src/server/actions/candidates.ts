@@ -1,18 +1,20 @@
 "use server";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { candidateItems, candidates, marketQuotes, sentimentSnapshots, stories, type CheckResult } from "@/db/schema";
+import { candidateItems, candidates, feedSources, marketQuotes, sentimentSnapshots, stories, type CheckResult } from "@/db/schema";
 import { draftSchema, EMPTY_DRAFT, type Draft } from "@/lib/content/blocks";
 import { dateKST } from "@/lib/format";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
+import { draftHash } from "../checks";
 import { buildDataDraft, DATA_TEMPLATES, type DataTemplateId } from "../generator/data-templates";
 import { getGenerator, type AssistResult } from "../generator";
-import { cdnPurge, invalidateFromAction } from "../invalidate";
+import { cdnPurge, invalidateFromAction, refreshInBackground } from "../invalidate";
+import { T } from "@/lib/cache-tags";
 import {
   computeChecks,
   loadCandidateItems,
@@ -25,6 +27,16 @@ import { fail, ok, type ActionState } from "./result";
 
 const beat = z.enum(["ai", "crypto", "economy", "tech", "sentiment"]);
 const id = z.uuid();
+
+/** Feed adapters that supply each data template's tables (for experiment attribution). */
+const TEMPLATE_ADAPTERS: Record<DataTemplateId, string[]> = {
+  crypto_daily: ["market.ws", "market.api", "onchain.api"],
+  market_close: ["market.ws", "market.api"],
+  sentiment_daily: ["market.ws", "community.agg", "social.stream"],
+};
+
+/** checks without the legal sign-off (any draft change invalidates it) */
+const dropLegal = sql`coalesce((select jsonb_agg(x) from jsonb_array_elements(${candidates.checks}) x where x->>'id' <> 'legal'), '[]'::jsonb)`;
 
 async function loadCandidate(candidateId: string) {
   const c = await db.query.candidates.findFirst({ where: eq(candidates.id, candidateId) });
@@ -85,6 +97,12 @@ export async function createDataAuto(input: { template: string }): Promise<Actio
     });
     if (!draft) throw new NewsroomError("템플릿에 필요한 데이터가 없습니다.", "invalid");
     const meta = DATA_TEMPLATES[template];
+    // attribute to the experiment of the active feed source that supplies this data
+    const [src] = await db
+      .select({ experimentId: feedSources.experimentId })
+      .from(feedSources)
+      .where(and(inArray(feedSources.adapter, TEMPLATE_ADAPTERS[template]), ne(feedSources.status, "error"), isNotNull(feedSources.experimentId)))
+      .limit(1);
     const [cand] = await db
       .insert(candidates)
       .values({
@@ -92,6 +110,7 @@ export async function createDataAuto(input: { template: string }): Promise<Actio
         mode: "data_auto",
         beat: meta.beat,
         priority: 40,
+        experimentId: src?.experimentId ?? null,
         draft,
         generator: { id: `template:${template}`, version: "1", generatedAt: new Date().toISOString(), inputItemIds: [] },
         assigneeId: me.id,
@@ -130,6 +149,8 @@ export async function saveDraft(input: {
       .parse(input);
 
     const now = new Date();
+    // A content change after sign-off voids the legal check and pulls a scheduled piece back to review.
+    const same = sql`(${candidates.draft} = ${JSON.stringify(p.draft)}::jsonb)`;
     const updated = await db
       .update(candidates)
       .set({
@@ -139,18 +160,22 @@ export async function saveDraft(input: {
         ...(p.priority !== undefined ? { priority: p.priority } : {}),
         updatedAt: now,
         lockVersion: sql`${candidates.lockVersion} + 1`,
-        // editing a fresh candidate moves it into drafting
-        status: sql`case when ${candidates.status} = 'new' then 'drafting'::candidate_status else ${candidates.status} end`,
+        status: sql`(case when ${candidates.status} = 'new' then 'drafting'
+                          when ${candidates.status} = 'scheduled' and not ${same} then 'review'
+                          else ${candidates.status}::text end)::candidate_status`,
+        scheduledAt: sql`case when ${candidates.status} = 'scheduled' and not ${same} then null else ${candidates.scheduledAt} end`,
+        scheduledById: sql`case when ${candidates.status} = 'scheduled' and not ${same} then null else ${candidates.scheduledById} end`,
+        checks: sql`case when ${same} then ${candidates.checks} else ${dropLegal} end`,
       })
-      .where(and(eq(candidates.id, p.id), eq(candidates.lockVersion, p.lockVersion)))
+      .where(and(eq(candidates.id, p.id), eq(candidates.lockVersion, p.lockVersion), ne(candidates.status, "published")))
       .returning({ lockVersion: candidates.lockVersion, status: candidates.status });
 
     if (!updated.length) {
       const exists = await db.query.candidates.findFirst({ where: eq(candidates.id, p.id), columns: { id: true, status: true } });
       if (!exists) throw new NewsroomError("후보를 찾을 수 없습니다.", "not_found");
+      if (exists.status === "published") throw new NewsroomError("이미 발행된 후보입니다.", "state");
       throw new NewsroomError("다른 편집자가 먼저 저장했습니다. 새로고침 후 다시 시도하세요.", "conflict");
     }
-    if (updated[0].status === "published") throw new NewsroomError("이미 발행된 후보입니다.", "state");
     void me;
     return ok("저장됨", { lockVersion: updated[0].lockVersion, savedAt: now.toISOString() });
   } catch (e) {
@@ -166,10 +191,12 @@ export async function moveCandidate(input: { id: string; status: string }): Prom
     const p = z.object({ id, status: z.enum(STATUS_FLOW) }).parse(input);
     const c = await loadCandidate(p.id);
     if (c.status === "published") throw new NewsroomError("발행된 후보는 이동할 수 없습니다.", "state");
-    await db
+    const moved = await db
       .update(candidates)
       .set({ status: p.status, scheduledAt: null, scheduledById: null, updatedAt: new Date(), lockVersion: sql`${candidates.lockVersion} + 1` })
-      .where(eq(candidates.id, p.id));
+      .where(and(eq(candidates.id, p.id), ne(candidates.status, "published")))
+      .returning({ id: candidates.id });
+    if (!moved.length) throw new NewsroomError("이미 발행된 후보입니다.", "state");
     await logActivity(db, { actorId: me.id, kind: "move", entityType: "candidate", entityId: p.id, summary: `상태 변경: ${c.status} → ${p.status}` });
     refresh();
     return ok();
@@ -196,10 +223,12 @@ export async function rejectCandidate(input: { id: string; reason: string }): Pr
     const p = z.object({ id, reason: z.string().trim().min(1).max(200) }).parse(input);
     const c = await loadCandidate(p.id);
     if (c.status === "published") throw new NewsroomError("발행된 후보는 반려할 수 없습니다.", "state");
-    await db
+    const rejected = await db
       .update(candidates)
-      .set({ status: "rejected", aiNote: `반려: ${p.reason}`, scheduledAt: null, updatedAt: new Date(), lockVersion: sql`${candidates.lockVersion} + 1` })
-      .where(eq(candidates.id, p.id));
+      .set({ status: "rejected", aiNote: `반려: ${p.reason}`, scheduledAt: null, scheduledById: null, updatedAt: new Date(), lockVersion: sql`${candidates.lockVersion} + 1` })
+      .where(and(eq(candidates.id, p.id), ne(candidates.status, "published")))
+      .returning({ id: candidates.id });
+    if (!rejected.length) throw new NewsroomError("발행된 후보는 반려할 수 없습니다.", "state");
     await logActivity(db, { actorId: me.id, kind: "reject", entityType: "candidate", entityId: p.id, summary: `반려: ${p.reason}` });
     refresh();
     return ok("반려했습니다.");
@@ -225,11 +254,14 @@ export async function regenerateDraft(input: { id: string }): Promise<ActionStat
         draft: gen.draft,
         aiNote: gen.aiNote,
         generator: gen.meta,
-        status: c.status === "new" ? "drafting" : c.status,
+        status: c.status === "new" ? "drafting" : c.status === "scheduled" ? "review" : c.status,
+        scheduledAt: null,
+        scheduledById: null,
+        checks: dropLegal,
         updatedAt: new Date(),
         lockVersion: sql`${candidates.lockVersion} + 1`,
       })
-      .where(eq(candidates.id, c.id))
+      .where(and(eq(candidates.id, c.id), ne(candidates.status, "published")))
       .returning({ lockVersion: candidates.lockVersion });
     await logActivity(db, { actorId: me.id, kind: "draft", entityType: "candidate", entityId: c.id, summary: `초안 생성 (${gen.meta.id})` });
     refresh();
@@ -287,6 +319,7 @@ export async function confirmLegal(input: { id: string; confirmed: boolean }): P
       ok: p.confirmed,
       blocking: true,
       message: p.confirmed ? `${me.name} 확인 (명예훼손·저작권·개인정보)` : "편집자가 직접 확인해야 합니다",
+      ...(p.confirmed ? { draftHash: draftHash(c.draft) } : {}),
     };
     const prev = c.checks.filter((x) => x.id !== "legal");
     await db.update(candidates).set({ checks: [...prev, legal] }).where(eq(candidates.id, c.id));
@@ -302,12 +335,23 @@ export async function confirmLegal(input: { id: string; confirmed: boolean }): P
 
 /* ───────────────────────── publish & schedule ───────────────────────── */
 
-export async function publishNow(input: { id: string; overrideReason?: string }): Promise<ActionState<{ slug: string }>> {
+/** Publish the draft version the editor reviewed (`lockVersion`); any newer change is refused. */
+export async function publishNow(input: { id: string; overrideReason?: string; lockVersion?: number }): Promise<ActionState<{ slug: string }>> {
   try {
     const me = await requireStaff();
-    const p = z.object({ id, overrideReason: z.string().trim().max(300).optional() }).parse(input);
-    const res = await publishCandidate(db, { candidateId: p.id, editorId: me.id, actorId: me.id, overrideReason: p.overrideReason });
+    const p = z
+      .object({ id, overrideReason: z.string().trim().max(300).optional(), lockVersion: z.number().int().min(0).optional() })
+      .parse(input);
+    const res = await publishCandidate(db, {
+      candidateId: p.id,
+      editorId: me.id,
+      actorId: me.id,
+      overrideReason: p.overrideReason,
+      expectedLockVersion: p.lockVersion,
+    });
+    if (!res) throw new NewsroomError("발행할 수 없는 상태입니다.", "state");
     invalidateFromAction(res.tags);
+    refreshInBackground([T.rel]);
     after(() => cdnPurge(res.paths));
     refresh();
     return ok("발행했습니다.", { slug: res.slug });
@@ -316,10 +360,10 @@ export async function publishNow(input: { id: string; overrideReason?: string })
   }
 }
 
-export async function scheduleCandidate(input: { id: string; at: string }): Promise<ActionState> {
+export async function scheduleCandidate(input: { id: string; at: string; lockVersion?: number }): Promise<ActionState> {
   try {
     const me = await requireStaff();
-    const p = z.object({ id, at: z.iso.datetime({ offset: true }) }).parse(input);
+    const p = z.object({ id, at: z.iso.datetime({ offset: true }), lockVersion: z.number().int().min(0).optional() }).parse(input);
     const at = new Date(p.at);
     if (at.getTime() < Date.now() + 60_000) throw new NewsroomError("예약 시각은 1분 이후여야 합니다.", "invalid");
     const c = await loadCandidate(p.id);
@@ -328,10 +372,19 @@ export async function scheduleCandidate(input: { id: string; at: string }): Prom
     const checks = await computeChecks(db, c.id, me.name);
     const blocking = checks.filter((x) => x.blocking && !x.ok && !x.overridden);
     if (blocking.length) throw new NewsroomError(`필수 체크 미통과: ${blocking.map((x) => x.message).join(" / ")}`, "blocked");
-    await db
+    const scheduled = await db
       .update(candidates)
       .set({ status: "scheduled", scheduledAt: at, scheduledById: me.id, checks, updatedAt: new Date(), lockVersion: sql`${candidates.lockVersion} + 1` })
-      .where(eq(candidates.id, c.id));
+      .where(
+        and(
+          eq(candidates.id, c.id),
+          eq(candidates.lockVersion, p.lockVersion ?? c.lockVersion),
+          ne(candidates.status, "published"),
+          ne(candidates.status, "rejected"),
+        ),
+      )
+      .returning({ id: candidates.id });
+    if (!scheduled.length) throw new NewsroomError("다른 편집자가 초안을 바꿨습니다. 새로고침 후 다시 예약하세요.", "conflict");
     await logActivity(db, { actorId: me.id, kind: "schedule", entityType: "candidate", entityId: c.id, summary: `예약 발행: ${at.toISOString()}` });
     refresh();
     return ok("예약했습니다.");
@@ -380,8 +433,14 @@ export async function detachItem(input: { id: string; itemId: string }): Promise
     await requireStaff();
     const p = z.object({ id, itemId: z.uuid() }).parse(input);
     await db.transaction(async (tx) => {
-      await tx.delete(candidateItems).where(and(eq(candidateItems.candidateId, p.id), eq(candidateItems.feedItemId, p.itemId)));
-      await tx.execute(sql`update feed_items set status = 'new' where id = ${p.itemId} and status = 'promoted'`);
+      const [c] = await tx.select({ status: candidates.status }).from(candidates).where(eq(candidates.id, p.id)).for("update");
+      if (!c) throw new NewsroomError("후보를 찾을 수 없습니다.", "not_found");
+      if (c.status === "published") throw new NewsroomError("발행된 후보의 원천 자료는 분리할 수 없습니다.", "state");
+      const removed = await tx
+        .delete(candidateItems)
+        .where(and(eq(candidateItems.candidateId, p.id), eq(candidateItems.feedItemId, p.itemId)))
+        .returning({ id: candidateItems.feedItemId });
+      if (removed.length) await tx.execute(sql`update feed_items set status = 'new' where id = ${p.itemId} and status = 'promoted'`);
     });
     refresh();
     return ok("원천 자료를 분리했습니다.");

@@ -1,4 +1,5 @@
 import { getArticle, getHomeData } from "@/data/public";
+import { QueueScope } from "@/components/feed/QueueScope";
 import { RiverClient } from "@/components/feed/RiverClient";
 import { toMini } from "@/components/feed/types";
 import { FiveThings } from "@/components/home/FiveThings";
@@ -10,6 +11,10 @@ import { BeatRails, PopularList, SectionHead, StoryList } from "@/components/hom
 export default async function HomePage() {
   const data = await getHomeData();
   const hero = data.hero ? await getArticle(data.hero.lead.slug) : null;
+  // Opening the lead starts the same "what to know" list the five-things panel uses.
+  const topQueue = data.hero
+    ? [data.hero.lead, ...data.five.map((f) => f.lead)].map((c) => ({ s: c.slug, t: c.title, b: c.beat, r: c.readSeconds }))
+    : [];
 
   return (
     <main className="mx-auto max-w-[1320px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
@@ -18,7 +23,9 @@ export default async function HomePage() {
       <div className="grid gap-5 lg:grid-cols-12">
         <div className="lg:col-span-8">
           {hero ? (
-            <Hero article={hero} updates={data.hero?.updates ?? 1} />
+            <QueueScope ctx="home:top" label="지금 알아야 할 것" items={topQueue}>
+              <Hero article={hero} updates={data.hero?.updates ?? 1} />
+            </QueueScope>
           ) : (
             <div className="panel p-10 text-center text-fg-3">아직 발행된 기사가 없습니다.</div>
           )}

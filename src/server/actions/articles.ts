@@ -44,7 +44,7 @@ export async function unpublishArticle(input: { id: string; reason: string }): P
       await refreshStoryStats(tx, a.storyId);
       await logActivity(tx, { actorId: me.id, kind: "unpublish", entityType: "article", entityId: a.id, summary: `비공개 전환: ${p.reason}` });
     });
-    invalidateFromAction([...publicTags(a), T.corrections]);
+    invalidateFromAction([...publicTags(a), T.corrections, ...(a.isSample ? [T.site] : [])]);
     after(() => cdnPurge(publicPaths(a)));
     refresh();
     return ok("기사를 비공개로 전환했습니다.");
@@ -64,7 +64,7 @@ export async function republishArticle(input: { id: string }): Promise<ActionSta
       await refreshStoryStats(tx, a.storyId);
       await logActivity(tx, { actorId: me.id, kind: "publish", entityType: "article", entityId: a.id, summary: "다시 공개" });
     });
-    invalidateFromAction(publicTags(a));
+    invalidateFromAction([...publicTags(a), T.corrections, ...(a.isSample ? [T.site] : [])]);
     after(() => cdnPurge(publicPaths(a)));
     refresh();
     return ok("다시 공개했습니다.");
@@ -86,6 +86,8 @@ export async function reviseArticle(input: {
   reason: string;
   correction: null | { kind: "correction" | "clarification" | "update"; note: string };
   requestId?: string | null;
+  /** the revision the editor started from — a newer revision (e.g. a correction) wins */
+  baseRevision?: number;
 }): Promise<ActionState<{ revision: number }>> {
   try {
     const me = await requireStaff();
@@ -100,12 +102,15 @@ export async function reviseArticle(input: {
           .object({ kind: z.enum(["correction", "clarification", "update"]), note: z.string().trim().min(5).max(500) })
           .nullable(),
         requestId: z.uuid().nullable().optional(),
+        baseRevision: z.number().int().min(1).optional(),
       })
       .parse(input);
     const a = await loadArticle(p.id);
-    const revision = a.revision + 1;
+    const base = p.baseRevision ?? a.revision;
+    const revision = base + 1;
     await db.transaction(async (tx) => {
-      await tx
+      // Optimistic concurrency: only the editor who saw the latest revision may write the next one.
+      const upd = await tx
         .update(articles)
         .set({
           title: p.title,
@@ -115,7 +120,11 @@ export async function reviseArticle(input: {
           readSeconds: readSecondsFor(p.title, p.dek, p.blocks),
           updatedAt: new Date(),
         })
-        .where(eq(articles.id, a.id));
+        .where(and(eq(articles.id, a.id), eq(articles.revision, base)))
+        .returning({ id: articles.id });
+      if (!upd.length) {
+        throw new NewsroomError("다른 편집자가 먼저 수정·정정했습니다. 최신 버전을 불러온 뒤 다시 적용하세요.", "conflict");
+      }
       await tx.insert(articleRevisions).values({
         articleId: a.id,
         revision,
@@ -132,10 +141,12 @@ export async function reviseArticle(input: {
           .values({ articleId: a.id, revision, kind: p.correction.kind, note: p.correction.note, createdBy: me.id })
           .returning({ id: articleCorrections.id });
         if (p.requestId) {
-          await tx
+          const resolved = await tx
             .update(correctionRequests)
             .set({ status: "accepted", resolvedAt: new Date(), correctionId: corr.id })
-            .where(and(eq(correctionRequests.id, p.requestId), eq(correctionRequests.articleId, a.id)));
+            .where(and(eq(correctionRequests.id, p.requestId), eq(correctionRequests.articleId, a.id), eq(correctionRequests.status, "open")))
+            .returning({ id: correctionRequests.id });
+          if (!resolved.length) throw new NewsroomError("이미 처리된 정정 요청입니다.", "state");
         }
       }
       await logActivity(tx, {
@@ -226,10 +237,12 @@ export async function rejectCorrectionRequest(input: { id: string; note: string 
   try {
     const me = await requireStaff();
     const p = z.object({ id, note: z.string().trim().min(2).max(500) }).parse(input);
-    await db
+    const done = await db
       .update(correctionRequests)
       .set({ status: "rejected", resolvedAt: new Date() })
-      .where(and(eq(correctionRequests.id, p.id), eq(correctionRequests.status, "open")));
+      .where(and(eq(correctionRequests.id, p.id), eq(correctionRequests.status, "open")))
+      .returning({ id: correctionRequests.id });
+    if (done.length === 0) throw new NewsroomError("이미 처리된 요청입니다. 새로고침해 상태를 확인하세요.", "state");
     await logActivity(db, { actorId: me.id, kind: "request", entityType: "correction_request", entityId: p.id, summary: `정정 요청 기각: ${p.note}` });
     refresh();
     return ok("요청을 기각했습니다.");

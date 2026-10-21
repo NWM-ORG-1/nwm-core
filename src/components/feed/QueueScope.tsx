@@ -25,8 +25,8 @@ export function QueueScope({
     <div
       className={className}
       onClickCapture={(e) => {
-        const a = (e.target as HTMLElement).closest("a[href^='/a/']");
-        if (a) setQueue({ ctx, label, items });
+        const a = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[href^='/a/']");
+        if (a) setQueue({ ctx, label, items }, a.getAttribute("href")!.slice(3));
       }}
     >
       {children}

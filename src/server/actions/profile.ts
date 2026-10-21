@@ -31,7 +31,11 @@ export async function updateMyProfile(_prev: ActionState, form: FormData): Promi
       .parse(Object.fromEntries(form.entries()));
     const taken = await db.query.staff.findFirst({ where: and(eq(staff.slug, p.slug), ne(staff.id, me.id)) });
     if (taken) return { ok: false, error: "이미 사용 중인 주소입니다.", code: "invalid", at: Date.now() };
-    await db.update(staff).set(p).where(eq(staff.id, me.id));
+    await db.transaction(async (tx) => {
+      await tx.update(staff).set(p).where(eq(staff.id, me.id));
+      // Keep the stored byline (admin lists, feeds) in step with the public one.
+      await tx.update(articles).set({ byline: `글 · ${p.name}` }).where(eq(articles.authorId, me.id));
+    });
     await logActivity(db, { actorId: me.id, kind: "settings", entityType: "settings", entityId: "profile", summary: `프로필 수정: ${p.name}` });
 
     // Articles print the editor's name: refresh the pages they signed.

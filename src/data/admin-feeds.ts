@@ -1,8 +1,9 @@
 import "server-only";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, or, sql, type SQL } from "drizzle-orm";
 import { connection } from "next/server";
 import { db } from "@/db/client";
-import { experiments, feedItems, feedSources } from "@/db/schema";
+import { experiments, feedItems, feedSources, type FeedItemStatus } from "@/db/schema";
+import type { InboxFilters } from "@/data/admin";
 import { requireStaff } from "@/server/auth";
 
 /**
@@ -121,9 +122,35 @@ export async function getSourceActivity(id: string) {
 export async function getSourceFormOptions() {
   await connection();
   await requireStaff();
-  const rows = await db.select({ id: feedSources.id, slug: feedSources.slug, adapter: feedSources.adapter }).from(feedSources);
+  const rows = await db.select({ id: feedSources.id, slug: feedSources.slug, name: feedSources.name, adapter: feedSources.adapter }).from(feedSources);
   return {
     adapters: [...new Set(["manual", ...rows.map((r) => r.adapter)])].sort(),
-    slugs: rows.map((r) => ({ id: r.id, slug: r.slug })),
+    slugs: rows.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
   };
+}
+
+/**
+ * Inbox tab counts under the active filters (source / hypothesis / beat / score /
+ * keyword), mirroring the WHERE clause of getInbox. getInbox's own counts are
+ * global; the page uses these only when a filter is set.
+ */
+export async function getInboxCounts(f: Omit<InboxFilters, "status">): Promise<Record<FeedItemStatus, number>> {
+  await connection();
+  await requireStaff();
+  const where: SQL[] = [];
+  if (f.source) where.push(eq(feedSources.slug, f.source));
+  if (f.experiment) where.push(eq(experiments.code, f.experiment));
+  if (f.beat) where.push(eq(feedItems.beatGuess, f.beat));
+  if (f.minScore) where.push(gte(feedItems.score, f.minScore));
+  if (f.q) where.push(or(ilike(feedItems.title, `%${f.q}%`), ilike(feedItems.summary, `%${f.q}%`))!);
+  const rows = await db
+    .select({ status: feedItems.status, n: sql<number>`count(*)::int` })
+    .from(feedItems)
+    .innerJoin(feedSources, eq(feedItems.sourceId, feedSources.id))
+    .leftJoin(experiments, eq(feedSources.experimentId, experiments.id))
+    .where(where.length ? and(...where) : undefined)
+    .groupBy(feedItems.status);
+  const out: Record<FeedItemStatus, number> = { new: 0, promoted: 0, dismissed: 0 };
+  for (const r of rows) out[r.status] = r.n;
+  return out;
 }

@@ -103,7 +103,10 @@ export function AiMixBar({ mix }: { mix: Record<AiInvolvement, number> }) {
                     i === 0 ? "left-0" : i === shown.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2",
                   )}
                 >
-                  {s.label} <span className="tabular font-mono">{s.n}건 · {s.pct}%</span>
+                  {s.label}{" "}
+                  <span className="tabular font-mono">
+                    {s.n}건 · {s.pct}%
+                  </span>
                 </span>
               </div>
             ))}
@@ -143,9 +146,7 @@ export function throughputSummary(values: number[], hourStartMs: number) {
 export function Throughput({ values, hourStartMs }: { values: number[]; hourStartMs: number }) {
   const n = values.length;
   const { startOf } = throughputSummary(values, hourStartMs);
-  const ticks = values
-    .map((_, i) => ({ i, t: kst(startOf(i)) }))
-    .filter(({ t }) => t.hour % 6 === 0);
+  const ticks = values.map((_, i) => ({ i, t: kst(startOf(i)) })).filter(({ t }) => t.hour % 6 === 0);
   const lastTick = ticks.at(-1)?.i ?? 0;
 
   return (
@@ -179,70 +180,104 @@ const STAGES = [
   { key: "published", label: "발행" },
 ] as const;
 
-/** Small multiples: one row per hypothesis, each funnel on its own single axis (its 수집 count). */
+/**
+ * Small multiples: one row per hypothesis, each funnel on its own single axis —
+ * that hypothesis's 수집 count is 100%. Stages are counted independently within
+ * the window, so a later stage can exceed it (work on items collected earlier);
+ * such a bar is drawn full with an axis break rather than silently rescaled.
+ */
 export function ExperimentFunnels({ funnels }: { funnels: ExperimentFunnel[] }) {
   if (!funnels.length) {
     return <p className="px-4 py-10 text-center text-[13px] text-fg-3">등록된 가설이 없습니다. 실험 화면에서 H1–H4를 만들고 소스를 배정하세요.</p>;
   }
+  const broken = funnels.some((f) => f.items > 0 && Math.max(f.promoted, f.candidates, f.published) > f.items);
   return (
-    <ul className="divide-y divide-line">
-      {funnels.map((f) => {
-        const axis = Math.max(1, f.items, f.promoted, f.candidates, f.published);
-        const st = EXPERIMENT_STATUS[f.status] ?? { label: f.status, tone: "neutral" as const };
-        const metrics = [
-          { label: "승격률", value: ratio(f.promoted, f.items), title: "승격 ÷ 수집" },
-          { label: "발행률", value: ratio(f.published, f.candidates), title: "발행 ÷ 후보 (100%+는 기간 이전에 만든 후보의 발행 포함)" },
-          { label: "완독률", value: ratio(f.reads, f.views), title: `완독 ${f.reads.toLocaleString("ko-KR")} ÷ 조회 ${f.views.toLocaleString("ko-KR")}` },
-          { label: "정정", value: `${f.corrections}건`, title: "정정·보완이 붙은 기사 수 (누적)", warn: f.corrections > 0 },
-          { label: "수집→발행", value: minutes(f.medianMinutesToPublish), title: "첫 수집부터 발행까지 걸린 시간의 중앙값" },
-        ];
-        return (
-          <li
-            key={f.id}
-            className="grid gap-x-6 gap-y-4 px-4 py-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,22rem)] xl:items-center"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <ExperimentDot code={f.code} colorSlot={f.colorSlot} />
-                <Badge tone={st.tone}>{st.label}</Badge>
-              </div>
-              <Link href="/admin/experiments" className="mt-1.5 block text-[13.5px] font-semibold leading-snug text-fg hover:underline">
-                {f.name}
-              </Link>
-              <p className="tabular mt-1 text-[12px] text-fg-3">소스 {f.sources}개 배정</p>
-            </div>
-
-            <dl className="min-w-0 space-y-1.5" aria-label={`${f.code} 퍼널: 수집 ${f.items}, 승격 ${f.promoted}, 후보 ${f.candidates}, 발행 ${f.published}`}>
-              {STAGES.map((s) => {
-                const v = f[s.key];
-                return (
-                  <div key={s.key} className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.75rem] items-center gap-2">
-                    <dt className="text-[11.5px] font-semibold text-fg-3">{s.label}</dt>
-                    <dd className="relative h-2 rounded-r-[4px] bg-bg-2" aria-hidden="true">
-                      {v > 0 && (
-                        <span
-                          className="absolute inset-y-0 left-0 min-w-[2px] rounded-r-[4px]"
-                          style={{ width: `${(v / axis) * 100}%`, background: `var(--c-${f.colorSlot})` }}
-                        />
-                      )}
-                    </dd>
-                    <dd className="tabular text-right font-mono text-[12px] text-fg-2">{v.toLocaleString("ko-KR")}</dd>
-                  </div>
-                );
-              })}
-            </dl>
-
-            <dl className="grid grid-cols-3 gap-x-3 gap-y-3 sm:grid-cols-5 md:col-span-2 xl:col-span-1">
-              {metrics.map((m) => (
-                <div key={m.label} className="min-w-0" title={m.title}>
-                  <dt className="truncate text-[11px] font-semibold text-fg-3">{m.label}</dt>
-                  <dd className={cx("tabular mt-1 text-[15px] font-semibold leading-none", m.warn ? "text-warn" : "text-fg")}>{m.value}</dd>
+    <>
+      <ul className="divide-y divide-line">
+        {funnels.map((f) => {
+          // No intake in the window: fall back to the largest stage so the bars stay readable.
+          const axis = f.items > 0 ? f.items : Math.max(1, f.promoted, f.candidates, f.published);
+          const st = EXPERIMENT_STATUS[f.status] ?? { label: f.status, tone: "neutral" as const };
+          const metrics = [
+            { label: "승격률", value: ratio(f.promoted, f.items), title: "승격 ÷ 수집" },
+            { label: "발행률", value: ratio(f.published, f.candidates), title: "발행 ÷ 후보 (100%+는 기간 이전에 만든 후보의 발행 포함)" },
+            { label: "완독률", value: ratio(f.reads, f.views), title: `완독 ${f.reads.toLocaleString("ko-KR")} ÷ 조회 ${f.views.toLocaleString("ko-KR")}` },
+            { label: "정정", value: `${f.corrections}건`, title: "정정·보완이 붙은 기사 수 (누적)", warn: f.corrections > 0 },
+            { label: "수집→발행", value: minutes(f.medianMinutesToPublish), title: "첫 수집부터 발행까지 걸린 시간의 중앙값" },
+          ];
+          return (
+            <li
+              key={f.id}
+              className="grid gap-x-6 gap-y-4 px-4 py-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,22rem)] xl:items-center"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ExperimentDot code={f.code} colorSlot={f.colorSlot} />
+                  <Badge tone={st.tone}>{st.label}</Badge>
                 </div>
-              ))}
-            </dl>
-          </li>
-        );
-      })}
-    </ul>
+                <Link href="/admin/experiments" className="mt-1.5 block text-[13.5px] font-semibold leading-snug text-fg hover:underline">
+                  {f.name}
+                </Link>
+                <p className="tabular mt-1 text-[12px] text-fg-3">소스 {f.sources}개 배정</p>
+              </div>
+
+              <dl className="min-w-0 space-y-1.5" aria-label={`${f.code} 퍼널: 수집 ${f.items}, 승격 ${f.promoted}, 후보 ${f.candidates}, 발행 ${f.published}`}>
+                {STAGES.map((s) => {
+                  const v = f[s.key];
+                  const over = v > axis;
+                  const color = `var(--c-${f.colorSlot})`;
+                  return (
+                    <div
+                      key={s.key}
+                      className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.75rem] items-center gap-2"
+                      title={over ? `${s.label} ${v}건 — 수집 ${f.items}건 기준을 넘음 (7일 이전에 수집된 자료 포함)` : undefined}
+                    >
+                      <dt className="text-[11.5px] font-semibold text-fg-3">{s.label}</dt>
+                      <dd className="relative h-2 rounded-r-[4px] bg-bg-2" aria-hidden="true">
+                        {v > 0 &&
+                          (over ? (
+                            <>
+                              {/* axis break: the value runs past this row's scale */}
+                              <span className="absolute inset-y-0 left-0 right-[9px]" style={{ background: color }} />
+                              <span className="absolute inset-y-0 right-0 w-[5px] rounded-r-[4px]" style={{ background: color }} />
+                            </>
+                          ) : (
+                            <span
+                              className="absolute inset-y-0 left-0 min-w-[2px] rounded-r-[4px]"
+                              style={{ width: `${(v / axis) * 100}%`, background: color }}
+                            />
+                          ))}
+                      </dd>
+                      <dd className="tabular text-right font-mono text-[12px] text-fg-2">
+                        {v.toLocaleString("ko-KR")}
+                        {over && <span className="sr-only"> (수집 기준 초과)</span>}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+
+              <dl className="grid grid-cols-3 gap-x-3 gap-y-3 sm:grid-cols-5 md:col-span-2 xl:col-span-1">
+                {metrics.map((m) => (
+                  <div key={m.label} className="min-w-0" title={m.title}>
+                    <dt className="truncate text-[11px] font-semibold text-fg-3">{m.label}</dt>
+                    <dd className={cx("tabular mt-1 text-[15px] font-semibold leading-none", m.warn ? "text-warn" : "text-fg")}>{m.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
+      {broken && (
+        <p className="flex items-center gap-2 border-t border-line px-4 py-2.5 text-[11.5px] leading-snug text-fg-3">
+          <span className="relative inline-block h-2 w-6 shrink-0" aria-hidden="true">
+            <span className="absolute inset-y-0 left-0 right-[9px] bg-fg-4" />
+            <span className="absolute inset-y-0 right-0 w-[5px] rounded-r-[3px] bg-fg-4" />
+          </span>
+          끊긴 막대는 수집 기준(100%)을 넘은 단계입니다. 단계마다 최근 7일 건수를 따로 세므로, 그 전에 수집된 자료가 이번 기간에 발행되면 생깁니다.
+        </p>
+      )}
+    </>
   );
 }

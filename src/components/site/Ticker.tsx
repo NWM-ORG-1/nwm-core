@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { startPulse, usePulse } from "@/lib/client/pulse";
 import { fmtChange, fmtPrice } from "@/lib/format";
 
@@ -8,10 +8,42 @@ import { fmtChange, fmtPrice } from "@/lib/format";
  * Market strip. Fixed height (no layout shift); values arrive from /api/pulse,
  * never from page HTML, so quotes changing never invalidates static pages.
  */
+const PAUSE_KEY = "nwm:ticker-paused";
+const PAUSE_EVT = "nwm:ticker";
+let memPaused = false; // when storage is unavailable
+
+const pauseStore = {
+  subscribe(cb: () => void) {
+    window.addEventListener(PAUSE_EVT, cb);
+    window.addEventListener("storage", cb);
+    return () => {
+      window.removeEventListener(PAUSE_EVT, cb);
+      window.removeEventListener("storage", cb);
+    };
+  },
+  get() {
+    try {
+      return localStorage.getItem(PAUSE_KEY) === "1";
+    } catch {
+      return memPaused;
+    }
+  },
+  set(paused: boolean) {
+    memPaused = paused;
+    try {
+      if (paused) localStorage.setItem(PAUSE_KEY, "1");
+      else localStorage.removeItem(PAUSE_KEY);
+    } catch {}
+    window.dispatchEvent(new Event(PAUSE_EVT));
+  },
+};
+
 export function Ticker() {
   const pulse = usePulse();
+  const paused = useSyncExternalStore(pauseStore.subscribe, pauseStore.get, () => false);
   useEffect(() => startPulse(), []);
   const quotes = pulse?.quotes ?? [];
+  const toggle = () => pauseStore.set(!paused);
 
   return (
     <div
@@ -29,7 +61,11 @@ export function Ticker() {
           ))}
         </div>
       ) : (
-        <div className="animate-marquee flex h-full w-max items-center" style={{ ["--marquee-duration" as string]: `${quotes.length * 6}s` }}>
+        <div
+          className="animate-marquee flex h-full w-max items-center"
+          data-paused={paused || undefined}
+          style={{ ["--marquee-duration" as string]: `${quotes.length * 6}s` }}
+        >
           {[0, 1].map((copy) => (
             <ul key={copy} className="flex shrink-0 items-center" aria-hidden={copy === 1 ? true : undefined}>
               {quotes.map((q) => (
@@ -43,6 +79,19 @@ export function Ticker() {
             </ul>
           ))}
         </div>
+      )}
+      {quotes.length > 0 && (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-pressed={paused}
+          aria-label={paused ? "시장 지표 재생" : "시장 지표 일시정지"}
+          className="absolute right-1 top-1/2 z-20 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-bg text-fg-3 hover:text-fg"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="currentColor">
+            {paused ? <path d="M2 1l7 4-7 4z" /> : <path d="M2 1h2v8H2zM6 1h2v8H6z" />}
+          </svg>
+        </button>
       )}
     </div>
   );

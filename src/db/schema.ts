@@ -64,6 +64,8 @@ export interface CheckResult {
   blocking: boolean;
   message: string;
   overridden?: { by: string; reason: string; at: string };
+  /** legal sign-off is bound to the exact draft it was given for */
+  draftHash?: string;
 }
 
 export interface GeneratorMeta {

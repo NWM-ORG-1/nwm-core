@@ -15,7 +15,7 @@ import {
   type PrimaryMetric,
 } from "@/components/admin/feeds/labels";
 import { Icon } from "@/components/ui/Icon";
-import { dateKST } from "@/lib/format";
+import { compactKo, dateKST } from "@/lib/format";
 
 export const metadata: Metadata = { title: "실험 · 가설" };
 
@@ -110,7 +110,7 @@ function ExperimentCard({ e }: { e: Exp }) {
   const tiles: Array<{ key: PrimaryMetric | "corrections"; label: string; value: string; sub: string }> = [
     { key: "promote_rate", label: "승격률", value: pctText(m.promoteRate), sub: `${m.promoted}/${m.items}` },
     { key: "publish_rate", label: "발행률", value: pctText(m.publishRate), sub: `${m.published}/${m.candidates}` },
-    { key: "read_rate", label: "완독률", value: pctText(m.readRate), sub: `${m.reads.toLocaleString("ko-KR")}/${m.views.toLocaleString("ko-KR")}` },
+    { key: "read_rate", label: "완독률", value: pctText(m.readRate), sub: `${compactKo(m.reads)}/${compactKo(m.views)}` },
     { key: "correction_rate", label: "정정", value: `${m.corrections}건`, sub: "누적" },
     { key: "time_to_publish", label: "발행 소요", value: formatMinutes(m.median), sub: "중앙값" },
   ];
@@ -126,20 +126,14 @@ function ExperimentCard({ e }: { e: Exp }) {
           <h2 id={`exp-${e.id}`} className="text-[16px] font-bold leading-snug tracking-[-0.01em] text-fg">
             {e.name}
           </h2>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-fg-3">
+          {/* gap-separated (no dots) so a wrapped line never starts or ends on a separator */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-3">
             <Badge tone={EXPERIMENT_STATUS_TONE[status]}>{EXPERIMENT_STATUS_LABEL[status]}</Badge>
             <span>
               주 지표 <span className="font-semibold text-fg-2">{PRIMARY_METRIC[primary].label}</span>
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{e.startedAt ? `${dateKST(e.startedAt)} 시작` : "시작 전"}</span>
-            {e.endedAt && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{dateKST(e.endedAt)} 종료</span>
-              </>
-            )}
-            <span aria-hidden="true">·</span>
+            <span className="tabular">{e.startedAt ? `${dateKST(e.startedAt)} 시작` : "시작 전"}</span>
+            {e.endedAt && <span className="tabular">{dateKST(e.endedAt)} 종료</span>}
             <Link href={`/admin/sources#exp-${e.code}`} className="underline-offset-2 hover:text-fg hover:underline">
               소스 {m.sources}개
             </Link>
@@ -200,12 +194,16 @@ function ExperimentCard({ e }: { e: Exp }) {
               );
             })}
             <div className="flex items-center justify-center rounded-lg border border-dashed border-line-2 px-2 py-2 text-center">
-              <Link
-                href={`/admin/feeds?status=all&experiment=${e.code}`}
-                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-fg-3 hover:text-fg"
-              >
-                인박스 <Icon name="arrowRight" size={12} />
-              </Link>
+              <dt className="sr-only">수집 항목</dt>
+              <dd>
+                <Link
+                  href={`/admin/feeds?status=all&experiment=${e.code}`}
+                  className="inline-flex items-center gap-1 text-[11.5px] font-medium text-fg-3 hover:text-fg"
+                  aria-label={`${e.code} 수집 항목을 인박스에서 보기`}
+                >
+                  인박스 <Icon name="arrowRight" size={12} />
+                </Link>
+              </dd>
             </div>
           </dl>
         </section>
@@ -240,7 +238,8 @@ const COLS: Col[] = [
   { key: "published", label: "발행", title: "최근 7일 발행", better: null, value: (m) => m.published, fmt: (v) => String(v ?? 0) },
   { key: "publish", label: "발행률", title: "발행 / 후보", better: "higher", value: (m) => m.publishRate, fmt: (v) => pctText(v), bar: true, metric: "publish_rate" },
   { key: "read", label: "완독률", title: "끝까지 읽음 / 조회", better: "higher", value: (m) => m.readRate, fmt: (v) => pctText(v), bar: true, metric: "read_rate" },
-  { key: "corr", label: "정정", title: "정정이 붙은 기사 수 (누적)", better: "lower", value: (m) => m.corrections, fmt: (v) => `${v ?? 0}건`, metric: "correction_rate" },
+  // A raw cumulative count is not comparable across hypotheses of different volume, so no "best" mark.
+  { key: "corr", label: "정정", title: "정정이 붙은 기사 수 (누적)", better: null, value: (m) => m.corrections, fmt: (v) => `${v ?? 0}건`, metric: "correction_rate" },
   { key: "ttp", label: "발행 소요", title: "첫 수집 → 발행, 중앙값", better: "lower", value: (m) => m.median, fmt: (v) => formatMinutes(v), metric: "time_to_publish" },
 ];
 
@@ -265,12 +264,12 @@ function Comparison({ exps }: { exps: Exp[] }) {
             가설 비교
           </h2>
           <p className="mt-0.5 text-[12.5px] text-fg-3">
-            같은 기준(최근 7일)으로 나란히 봅니다. 비율 막대는 모두 0–100% 한 축입니다. <span className="font-semibold text-fg-2">굵은 값</span>이 열에서 가장 좋은 값, 테두리 칸은 그 가설의 주
-            지표입니다.
+            같은 기준(최근 7일)으로 나란히 봅니다. 비율 막대는 모두 0–100% 한 축입니다. <span className="font-semibold text-fg-2">굵은 값</span>이 열에서 가장 좋은 비율·소요시간, 테두리 칸은 그
+            가설의 주 지표입니다.
           </p>
         </div>
       </div>
-      <div className="panel overflow-x-auto">
+      <div className="panel relative overflow-x-auto">
         <table className="w-full min-w-[920px] border-collapse text-left text-[13px]">
           <caption className="sr-only">가설별 퍼널·결과 지표 비교 (최근 7일, 정정은 누적)</caption>
           <thead>
@@ -302,7 +301,7 @@ function Comparison({ exps }: { exps: Exp[] }) {
                   <th scope="row" className="sticky left-0 z-[1] border-b border-line bg-bg-1 px-3 py-2.5 text-left font-normal">
                     <Link href={`/admin/experiments/${e.id}`} className="flex items-center gap-2 hover:text-fg">
                       <ExperimentChip code={e.code} colorSlot={e.colorSlot} />
-                      <span className="max-w-[200px] truncate text-[12.5px] font-semibold text-fg-2" title={e.name}>
+                      <span className="max-w-[96px] truncate text-[12.5px] font-semibold text-fg-2 sm:max-w-[200px]" title={e.name}>
                         {e.name}
                       </span>
                     </Link>

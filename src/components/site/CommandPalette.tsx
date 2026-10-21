@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchRecord } from "@/data/dto";
 import type { Beat } from "@/db/schema";
 import { BEATS, BEAT_ORDER } from "@/lib/beats";
@@ -11,15 +11,22 @@ import { searchIndex } from "@/lib/search";
 import { beatDotClass } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
 
-let indexPromise: Promise<SearchRecord[]> | null = null;
+// Refetched after a minute (the route's max-age) so long-lived tabs see new and unpublished articles.
+const INDEX_TTL = 60_000;
+let cached: { at: number; p: Promise<SearchRecord[]> } | null = null;
+let lastIndex: SearchRecord[] | null = null;
 function loadIndex() {
-  indexPromise ??= fetch("/api/search-index")
-    .then((r) => (r.ok ? r.json() : []))
-    .catch(() => {
-      indexPromise = null;
-      return [];
-    });
-  return indexPromise;
+  if (!cached || Date.now() - cached.at > INDEX_TTL) {
+    const p: Promise<SearchRecord[]> = fetch("/api/search-index")
+      .then((r) => (r.ok ? (r.json() as Promise<SearchRecord[]>) : Promise.reject(r.status)))
+      .then((rows) => (lastIndex = rows))
+      .catch(() => {
+        if (cached?.p === p) cached = null;
+        return lastIndex ?? [];
+      });
+    cached = { at: Date.now(), p };
+  }
+  return cached.p;
 }
 
 type Row =
@@ -38,26 +45,33 @@ const SHORTCUTS: Array<[string, string]> = [
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [q, setQ] = useState("");
-  const [index, setIndex] = useState<SearchRecord[] | null>(null);
+  const [index, setIndex] = useState<SearchRecord[] | null>(lastIndex);
   const [cursor, setCursor] = useState(0);
   const [help, setHelp] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let alive = true;
     loadIndex().then((r) => alive && setIndex(r));
     inputRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Back/forward navigates without going through the palette, so close on it too.
+    const onPop = () => onCloseRef.current();
+    window.addEventListener("popstate", onPop);
     return () => {
       alive = false;
       document.body.style.overflow = prev;
+      window.removeEventListener("popstate", onPop);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
-
-  // A hidden (Activity) route must not keep the palette open.
-  useLayoutEffect(() => () => onClose(), [onClose]);
 
   const rows: Row[] = useMemo(() => {
     const go = (href: string) => () => {
@@ -86,8 +100,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     return [...hits.map((h) => ({ kind: "article" as const, slug: h.slug, title: h.title, dek: h.dek, beat: h.beat })), ...cmd];
   }, [q, index, onClose, router]);
 
-  useEffect(() => setCursor(0), [q]);
-
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-row="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
@@ -115,6 +127,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     } else if (e.key === "Enter") {
       e.preventDefault();
       activate(rows[cursor]);
+    } else if (e.key === "Tab") {
+      // The input is the dialog's only control; keep focus inside the modal.
+      e.preventDefault();
+      inputRef.current?.focus();
     }
   };
 
@@ -132,7 +148,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setCursor(0);
+            }}
             placeholder="기사·키워드 검색 (초성 검색 지원: ㅎㅂㅂㄷ)"
             aria-label="검색어"
             role="combobox"
@@ -159,39 +178,46 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             </dl>
           </div>
         ) : (
-          <ul id="palette-list" ref={listRef} role="listbox" className="max-h-[56vh] overflow-y-auto p-2">
-            {q.trim() && index && rows.length === 0 && <li className="px-3 py-8 text-center text-[14px] text-fg-3">‘{q}’에 맞는 기사가 없습니다.</li>}
-            {q.trim() && !index && <li className="px-3 py-8 text-center text-[14px] text-fg-3">검색 색인을 불러오는 중…</li>}
-            {!q.trim() && <li className="kicker px-3 pb-1 pt-2 text-fg-4">바로가기</li>}
-            {rows.map((r, i) => (
-              <li
-                key={r.kind === "article" ? r.slug : r.id}
-                id={`palette-row-${i}`}
-                data-row={i}
-                role="option"
-                aria-selected={i === cursor}
-                onMouseMove={() => setCursor(i)}
-                onClick={() => activate(r)}
-                className={`flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 ${i === cursor ? "bg-bg-2" : ""}`}
-              >
-                {r.kind === "article" ? (
-                  <>
-                    <span className={`mt-[7px] size-1.5 shrink-0 rounded-full ${beatDotClass(r.beat)}`} aria-hidden="true" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[15px] font-semibold text-fg">{r.title}</span>
-                      <span className="block truncate text-[13px] text-fg-3">{r.dek}</span>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Icon name="arrowRight" size={14} className="mt-[3px] shrink-0 text-fg-4" />
-                    <span className="flex-1 text-[14px] text-fg-2">{r.label}</span>
-                    <span className="hud text-fg-4">{r.hint}</span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className="max-h-[56vh] overflow-y-auto p-2">
+            {!q.trim() && (
+              <p id="palette-label" className="kicker px-3 pb-1 pt-2 text-fg-4">
+                바로가기
+              </p>
+            )}
+            <p role="status" className={q.trim() && (!index || rows.length === 0) ? "px-3 py-8 text-center text-[14px] text-fg-3" : "sr-only"}>
+              {!q.trim() ? "" : !index ? "검색 색인을 불러오는 중…" : rows.length === 0 ? `‘${q}’에 맞는 기사가 없습니다.` : `${rows.length}건`}
+            </p>
+            <ul id="palette-list" ref={listRef} role="listbox" aria-label={q.trim() ? "검색 결과" : "바로가기"}>
+              {rows.map((r, i) => (
+                <li
+                  key={r.kind === "article" ? r.slug : r.id}
+                  id={`palette-row-${i}`}
+                  data-row={i}
+                  role="option"
+                  aria-selected={i === cursor}
+                  onMouseMove={() => setCursor(i)}
+                  onClick={() => activate(r)}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 ${i === cursor ? "bg-bg-2" : ""}`}
+                >
+                  {r.kind === "article" ? (
+                    <>
+                      <span className={`mt-[7px] size-1.5 shrink-0 rounded-full ${beatDotClass(r.beat)}`} aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[15px] font-semibold text-fg">{r.title}</span>
+                        <span className="block truncate text-[13px] text-fg-3">{r.dek}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="arrowRight" size={14} className="mt-[3px] shrink-0 text-fg-4" />
+                      <span className="flex-1 text-[14px] text-fg-2">{r.label}</span>
+                      <span className="hud text-fg-4">{r.hint}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>

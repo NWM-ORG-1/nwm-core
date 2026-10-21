@@ -23,7 +23,8 @@ export class AuthError extends Error {
  */
 export const requireStaff = cache(async (): Promise<StaffRow> => {
   const h = await headers();
-  const login = verifyBasicAuth(h.get("authorization"));
+  const login = await verifyBasicAuth(h.get("authorization"));
+  if (login === "busy") throw new AuthError("요청이 많습니다. 잠시 후 다시 시도하세요.");
   if (!login) throw new AuthError();
 
   // CSRF defence in depth: browsers attach Basic credentials cross-site.

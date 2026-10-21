@@ -39,6 +39,13 @@ export function ymdKST(iso: string | Date): string {
   return ymdParts.format(new Date(iso));
 }
 
+/** A real calendar date in YYYY-MM-DD form within a sane range (rejects 2026-02-30, 2026-13-45). */
+export function isYmd(s: string): boolean {
+  if (!/^(20\d{2})-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s;
+}
+
 /** Relative time; the caller supplies `now` (browser clock). */
 export function relTime(iso: string, now: number): string {
   const diff = Math.max(0, now - new Date(iso).getTime());

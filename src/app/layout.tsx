@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#05060a",
+  // theme-color is written by PREFS_SCRIPT so it follows the reader's light/dark choice.
   colorScheme: "dark light",
   width: "device-width",
   initialScale: 1,
