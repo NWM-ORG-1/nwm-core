@@ -282,7 +282,9 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
   const storyTitle = stories.find((s) => s.id === doc.storyId)?.title ?? null;
   // the first assist call records a (non-template) generator on the server
   const ai = aiInvolvementOf(c.mode, c.generator?.id ?? (usedAi ? "assist" : null));
-  const byline = bylineOf(ai, BEATS[doc.beat].label, bundle.me.name);
+  // a published candidate shows who signed the article; otherwise the signer is whoever publishes
+  const signer = c.article?.editorName ?? bundle.me.name;
+  const byline = c.article?.byline ?? bylineOf(ai, BEATS[doc.beat].label, signer);
   const existing = useMemo(() => new Set<BlockType>(doc.blocks.map((b) => b.block.type)), [doc.blocks]);
   const sum = checkSummary(checks, checkLabels);
 
@@ -307,13 +309,13 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
       isBreaking: draft.isBreaking,
       storyTitle,
       ai,
-      editorName: bundle.me.name,
+      editorName: signer,
       byline,
       tickers: draft.tickers,
       tags: draft.tags,
       sources: srcs,
     };
-  }, [draft, doc.beat, storyTitle, ai, bundle.me.name, byline]);
+  }, [draft, doc.beat, storyTitle, ai, signer, byline]);
 
   /* ───────── tabs & top-bar actions ───────── */
   const [tab, setTab] = useState<Tab>(c.status === "new" || c.status === "drafting" ? "assist" : "publish");
@@ -717,8 +719,8 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
                 published={readOnly}
                 scheduledAt={c.scheduledAt}
                 ai={ai}
-                editorName={bundle.me.name}
-                editorPlaceholder={bundle.me.placeholder}
+                editorName={signer}
+                editorPlaceholder={!c.article && bundle.me.placeholder}
                 byline={byline}
                 storyTitle={storyTitle}
                 checks={checks}

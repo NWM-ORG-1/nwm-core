@@ -2,7 +2,7 @@
 
 import type { CandidateStatus } from "@/db/schema";
 import { clockKST, dateKST } from "@/lib/format";
-import { CANDIDATE_STATUS_LABEL } from "@/lib/labels";
+import { ASSIST_ACTION_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 
 export type Tone = "neutral" | "ice" | "good" | "warn" | "bad" | "live";
 
@@ -50,14 +50,8 @@ export function activityKind(kind: string) {
   return ACTIVITY_KIND[kind] ?? { label: kind, tone: "neutral" as const };
 }
 
-/** Assist action ids as the editor's AI 어시스트 panel names them. */
-const ASSIST_LABEL: Record<string, string> = {
-  headlines: "제목 후보",
-  tighten: "간결하게",
-  why: "왜 중요한가",
-  numbers: "숫자로 보면",
-  next: "다음 관전 포인트",
-};
+/** Assist action ids as the editor's AI 어시스트 panel names them (older log rows store the id). */
+const ASSIST_LABEL = ASSIST_ACTION_LABEL;
 
 const ISO_RE = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})\b/g;
 

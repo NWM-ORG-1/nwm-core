@@ -61,8 +61,10 @@ export default function ArticlesPage({ searchParams }: PageProps<"/admin/article
 
 async function ArticleList({ searchParams }: { searchParams: Promise<SP> }) {
   const values = parse(await searchParams);
-  const [all, s] = await Promise.all([getArticlesAdmin({ status: values.status, beat: values.beat, q: values.q }), getArticlesSummary()]);
-  const rows = values.flag === "requests" ? all.filter((a) => a.openRequests > 0) : values.flag === "corrected" ? all.filter((a) => a.corrections > 0) : all;
+  const [rows, s] = await Promise.all([
+    getArticlesAdmin({ status: values.status, beat: values.beat, q: values.q, flag: values.flag }),
+    getArticlesSummary(),
+  ]);
 
   const done = rate(s.reads7, s.views7);
   const next = rate(s.nexts7, s.views7);
@@ -99,7 +101,7 @@ async function ArticleList({ searchParams }: { searchParams: Promise<SP> }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TabLinks tabs={tabs} active={values.status ?? "all"} />
         <p className="text-[12px] text-fg-3">
-          <span className="tabular">{rows.length}</span>건 표시{all.length >= LIST_LIMIT ? ` (최근 ${LIST_LIMIT}건 안에서)` : ""} · 최근 발행순 · 조회·비율은 최근 7일
+          <span className="tabular">{rows.length}</span>건 표시{rows.length >= LIST_LIMIT ? ` (최근 ${LIST_LIMIT}건까지)` : ""} · 최근 발행순 · 조회·비율은 최근 7일
         </p>
       </div>
 

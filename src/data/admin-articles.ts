@@ -30,11 +30,11 @@ export async function getArticlesSummary() {
       (select count(*) from articles where status = 'published')::int as published,
       (select count(*) from articles where status = 'unpublished')::int as unpublished,
       (select coalesce(sum(s.views), 0) from article_stats_daily s join articles a on a.id = s.article_id
-        where a.status = 'published' and s.day >= current_date - 7)::int as views7,
+        where a.status = 'published' and s.day >= (now() at time zone 'Asia/Seoul')::date - 6)::int as views7,
       (select coalesce(sum(s.reads), 0) from article_stats_daily s join articles a on a.id = s.article_id
-        where a.status = 'published' and s.day >= current_date - 7)::int as reads7,
+        where a.status = 'published' and s.day >= (now() at time zone 'Asia/Seoul')::date - 6)::int as reads7,
       (select coalesce(sum(s.nexts), 0) from article_stats_daily s join articles a on a.id = s.article_id
-        where a.status = 'published' and s.day >= current_date - 7)::int as nexts7,
+        where a.status = 'published' and s.day >= (now() at time zone 'Asia/Seoul')::date - 6)::int as nexts7,
       (select count(distinct article_id) from correction_requests where status = 'open')::int as articles_with_open,
       (select count(*) from correction_requests where status = 'open')::int as open_requests,
       (select min(received_at) from correction_requests where status = 'open') as oldest_open_at,

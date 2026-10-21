@@ -17,10 +17,13 @@ import {
   stories,
   type Beat,
   type CandidateStatus,
+  type CheckId,
+  type CheckResult,
   type FeedItemStatus,
 } from "@/db/schema";
 import { LEGAL_DEFAULTS, legalFromEnv, type Legal } from "@/lib/site";
 import { requireStaff } from "@/server/auth";
+import { CHECK_META } from "@/server/checks";
 import { isPlaceholderStaff, loadCandidateItems } from "@/server/newsroom";
 
 /**
@@ -33,6 +36,23 @@ async function guard() {
 }
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
+
+/**
+ * Board-card check summary, counted against every check (as the editor does), so a card
+ * never reads "5/5" while the editor shows "5/8". Required checks that never ran count as
+ * not passed. No run at all → total 0 ("체크 전").
+ */
+function boardChecks(checks: CheckResult[]) {
+  if (checks.length === 0) return { total: 0, passed: 0, blocking: 0 };
+  const byId = new Map(checks.map((c) => [c.id, c]));
+  const ids = Object.keys(CHECK_META) as CheckId[];
+  const pass = (c: CheckResult | undefined) => Boolean(c && (c.ok || c.overridden));
+  return {
+    total: ids.length,
+    passed: ids.filter((i) => pass(byId.get(i))).length,
+    blocking: ids.filter((i) => CHECK_META[i].blocking && !pass(byId.get(i))).length,
+  };
+}
 
 /* ───────────────────────────── shell ───────────────────────────── */
 
@@ -454,11 +474,7 @@ export async function getBoard() {
     title: r.draft.title || r.idea || "(제목 없음)",
     dek: r.draft.dek,
     aiNote: r.aiNote,
-    checks: {
-      total: r.checks.length,
-      passed: r.checks.filter((c) => c.ok || c.overridden).length,
-      blocking: r.checks.filter((c) => c.blocking && !c.ok && !c.overridden).length,
-    },
+    checks: boardChecks(r.checks),
     scheduledAt: iso(r.scheduledAt),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -486,7 +502,11 @@ export async function getCandidateBundle(id: string) {
     .orderBy(desc(stories.lastPublishedAt))
     .limit(60);
   const article = c.articleId
-    ? await db.query.articles.findFirst({ where: eq(articles.id, c.articleId), columns: { slug: true, status: true } })
+    ? await db.query.articles.findFirst({
+        where: eq(articles.id, c.articleId),
+        columns: { slug: true, status: true, byline: true },
+        with: { editor: { columns: { name: true } } },
+      })
     : null;
   return {
     me: { id: me.id, name: me.name, placeholder: isPlaceholderStaff(me) },
@@ -508,7 +528,8 @@ export async function getCandidateBundle(id: string) {
       storyId: c.storyId,
       assigneeId: c.assigneeId,
       experiment: c.experiment ? { code: c.experiment.code, name: c.experiment.name, colorSlot: c.experiment.colorSlot } : null,
-      article: article ? { slug: article.slug, status: article.status } : null,
+      // once published, the article (not the person viewing it) says who signed it
+      article: article ? { slug: article.slug, status: article.status, byline: article.byline, editorName: article.editor?.name ?? null } : null,
     },
     items: items.map((i) => ({
       id: i.id,
@@ -546,12 +567,21 @@ export async function getStaffAndStories() {
 
 /* ───────────────────────────── articles ───────────────────────────── */
 
-export async function getArticlesAdmin(f: { beat?: Beat; status?: "published" | "unpublished"; q?: string }) {
+export async function getArticlesAdmin(f: {
+  beat?: Beat;
+  status?: "published" | "unpublished";
+  q?: string;
+  /** correction state, applied in SQL so the 200-row limit counts matching rows only */
+  flag?: "requests" | "corrected";
+}) {
   await guard();
   const where: SQL[] = [];
   if (f.beat) where.push(eq(articles.beat, f.beat));
   if (f.status) where.push(eq(articles.status, f.status));
   if (f.q) where.push(ilike(articles.title, `%${f.q}%`));
+  if (f.flag === "requests")
+    where.push(sql`exists (select 1 from correction_requests r where r.article_id = ${articles.id} and r.status = 'open')`);
+  if (f.flag === "corrected") where.push(sql`exists (select 1 from article_corrections c where c.article_id = ${articles.id})`);
   const rows = await db
     .select({
       id: articles.id,
@@ -568,9 +598,9 @@ export async function getArticlesAdmin(f: { beat?: Beat; status?: "published" | 
       isSample: articles.isSample,
       editor: staff.name,
       storyTitle: stories.title,
-      views: sql<number>`coalesce((select sum(views) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= current_date - 7), 0)::int`,
-      reads: sql<number>`coalesce((select sum(reads) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= current_date - 7), 0)::int`,
-      nexts: sql<number>`coalesce((select sum(nexts) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= current_date - 7), 0)::int`,
+      views: sql<number>`coalesce((select sum(views) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= (now() at time zone 'Asia/Seoul')::date - 6), 0)::int`,
+      reads: sql<number>`coalesce((select sum(reads) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= (now() at time zone 'Asia/Seoul')::date - 6), 0)::int`,
+      nexts: sql<number>`coalesce((select sum(nexts) from article_stats_daily s where s.article_id = ${articles.id} and s.day >= (now() at time zone 'Asia/Seoul')::date - 6), 0)::int`,
       corrections: sql<number>`(select count(*) from article_corrections c where c.article_id = ${articles.id})::int`,
       openRequests: sql<number>`(select count(*) from correction_requests r where r.article_id = ${articles.id} and r.status = 'open')::int`,
     })

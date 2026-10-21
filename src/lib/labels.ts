@@ -45,6 +45,23 @@ export const CANDIDATE_STATUS_LABEL: Record<CandidateStatus, string> = {
   rejected: "반려",
 };
 
+/** AI 어시스트 actions, as the editor's panel names them. */
+export const ASSIST_ACTION_LABEL: Record<string, string> = {
+  headlines: "제목 후보",
+  tighten: "간결하게",
+  why: "왜 중요한가",
+  numbers: "숫자로 보면",
+  next: "다음 관전 포인트",
+};
+
+/** How a correction request reached the newsroom. */
+export const REQUEST_CHANNEL_LABEL: Record<string, string> = {
+  email: "이메일",
+  phone: "전화",
+  web: "웹 신청",
+  mail: "우편",
+};
+
 export const CANDIDATE_MODE_LABEL: Record<CandidateMode, { label: string; short: string; ai: AiInvolvement }> = {
   feed_draft: { label: "피드 → AI 초안", short: "피드 AI", ai: "ai_draft_edited" },
   data_auto: { label: "데이터 자동 생성", short: "데이터 자동", ai: "auto" },

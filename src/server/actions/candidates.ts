@@ -7,7 +7,8 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { candidateItems, candidates, feedSources, marketQuotes, sentimentSnapshots, stories, type CheckResult } from "@/db/schema";
 import { draftSchema, EMPTY_DRAFT, type Draft } from "@/lib/content/blocks";
-import { dateKST } from "@/lib/format";
+import { dateKST, dateTimeKST } from "@/lib/format";
+import { ASSIST_ACTION_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { draftHash } from "../checks";
@@ -197,7 +198,7 @@ export async function moveCandidate(input: { id: string; status: string }): Prom
       .where(and(eq(candidates.id, p.id), ne(candidates.status, "published")))
       .returning({ id: candidates.id });
     if (!moved.length) throw new NewsroomError("이미 발행된 후보입니다.", "state");
-    await logActivity(db, { actorId: me.id, kind: "move", entityType: "candidate", entityId: p.id, summary: `상태 변경: ${c.status} → ${p.status}` });
+    await logActivity(db, { actorId: me.id, kind: "move", entityType: "candidate", entityId: p.id, summary: `상태 변경: ${CANDIDATE_STATUS_LABEL[c.status]} → ${CANDIDATE_STATUS_LABEL[p.status]}` });
     refresh();
     return ok();
   } catch (e) {
@@ -286,7 +287,7 @@ export async function assistDraft(input: { id: string; draft: Draft; action: str
         .set({ generator: { id: getGenerator().id, version: getGenerator().version, generatedAt: new Date().toISOString(), inputItemIds: items.map((i) => i.id) } })
         .where(eq(candidates.id, c.id));
     }
-    await logActivity(db, { actorId: me.id, kind: "assist", entityType: "candidate", entityId: c.id, summary: `AI 어시스트: ${p.action}` });
+    await logActivity(db, { actorId: me.id, kind: "assist", entityType: "candidate", entityId: c.id, summary: `AI 어시스트: ${ASSIST_ACTION_LABEL[p.action] ?? p.action}` });
     return ok(undefined, result);
   } catch (e) {
     return fail(e);
@@ -385,7 +386,7 @@ export async function scheduleCandidate(input: { id: string; at: string; lockVer
       )
       .returning({ id: candidates.id });
     if (!scheduled.length) throw new NewsroomError("다른 편집자가 초안을 바꿨습니다. 새로고침 후 다시 예약하세요.", "conflict");
-    await logActivity(db, { actorId: me.id, kind: "schedule", entityType: "candidate", entityId: c.id, summary: `예약 발행: ${at.toISOString()}` });
+    await logActivity(db, { actorId: me.id, kind: "schedule", entityType: "candidate", entityId: c.id, summary: `예약 발행: ${dateTimeKST(at)}` });
     refresh();
     return ok("예약했습니다.");
   } catch (e) {

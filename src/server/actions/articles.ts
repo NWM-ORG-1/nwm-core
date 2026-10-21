@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { articleCorrections, articleRevisions, articles, correctionRequests, stories } from "@/db/schema";
 import { BEATS } from "@/lib/beats";
+import { REQUEST_CHANNEL_LABEL } from "@/lib/labels";
 import { T } from "@/lib/cache-tags";
 import { blockSchema, readSecondsFor } from "@/lib/content/blocks";
 import { logActivity } from "../activity";
@@ -225,7 +226,7 @@ export async function logCorrectionRequest(input: {
       })
       .parse(input);
     const [r] = await db.insert(correctionRequests).values(p).returning({ id: correctionRequests.id });
-    await logActivity(db, { actorId: me.id, kind: "request", entityType: "correction_request", entityId: r.id, summary: `정정 요청 접수 (${p.channel})` });
+    await logActivity(db, { actorId: me.id, kind: "request", entityType: "correction_request", entityId: r.id, summary: `정정 요청 접수 (${REQUEST_CHANNEL_LABEL[p.channel] ?? p.channel})` });
     refresh();
     return ok("정정 요청을 접수했습니다.");
   } catch (e) {

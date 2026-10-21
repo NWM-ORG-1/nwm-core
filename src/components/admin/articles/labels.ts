@@ -20,12 +20,7 @@ export const CORRECTION_KIND_HELP: Record<CorrectionKind, string> = {
   update: "보도 이후 새로 확인된 사실을 덧붙인 경우.",
 };
 
-export const REQUEST_CHANNEL_LABEL: Record<string, string> = {
-  email: "이메일",
-  phone: "전화",
-  web: "웹 신청",
-  mail: "우편",
-};
+export { REQUEST_CHANNEL_LABEL } from "@/lib/labels";
 
 export const REQUEST_STATUS_LABEL: Record<string, string> = {
   open: "미처리",
