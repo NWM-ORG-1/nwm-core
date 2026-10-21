@@ -26,23 +26,26 @@ test.describe("reading flow", () => {
     const hrefs = await links.evaluateAll((els) => els.slice(0, 4).map((e) => e.getAttribute("href")));
     await links.nth(1).click();
     await expect(page).toHaveURL(new RegExp(`${hrefs[1]}$`));
-    const box = await page.locator("article[aria-labelledby='article-title']").boundingBox();
-    if (!box) throw new Error("no article");
-    const y = box.y + 260;
+    // the reader is live once the dock shows this list's position (client queue loaded, handlers attached)
+    await expect(page.getByRole("navigation", { name: "이전·다음 기사" })).toContainText("2/");
+    // swipe across the signal paragraph: plain text, so the handler never treats it as a link or button
+    const dek = page.locator("article[aria-labelledby='article-title'] h1 + div p").last();
+    const box = await dek.boundingBox();
+    if (!box) throw new Error("no signal paragraph");
     // synthesize a horizontal touch swipe via pointer events
     await page.evaluate(
-      async ({ y, w }) => {
-        const el = document.elementFromPoint(w * 0.7, y)!;
+      async ({ x0, y }) => {
+        const el = document.elementFromPoint(x0, y)!;
         const fire = (type: string, x: number) =>
           el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "touch", clientX: x, clientY: y, pointerId: 1, isPrimary: true }));
-        fire("pointerdown", w * 0.8);
+        fire("pointerdown", x0);
         for (let i = 1; i <= 6; i++) {
-          fire("pointermove", w * 0.8 - i * 30);
+          fire("pointermove", x0 - i * 30);
           await new Promise((r) => setTimeout(r, 16));
         }
-        fire("pointerup", w * 0.8 - 180);
+        fire("pointerup", x0 - 180);
       },
-      { y, w: page.viewportSize()!.width },
+      { x0: Math.round(box.x + box.width * 0.85), y: Math.round(box.y + box.height / 2) },
     );
     await expect(page).toHaveURL(new RegExp(`${hrefs[2]}$`));
   });
