@@ -1,0 +1,30 @@
+name: Feeds probe
+
+# Talks to the real feed endpoints from a GitHub runner (US network) and prints
+# what comes back, so parsers can be checked against live responses.
+# Not a gate: geo-blocks and rate limits here say little about Railway (Singapore).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/probe/**"
+      - ".github/workflows/feeds-probe.yml"
+
+concurrency:
+  group: feeds-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  raw:
+    name: Raw responses
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node scripts/probe/raw-capture.mjs

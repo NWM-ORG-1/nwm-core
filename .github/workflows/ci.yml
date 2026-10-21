@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: ["**"]
-    paths-ignore: ["**/*.md"]
+    paths-ignore: ["**/*.md", "scripts/probe/**", ".github/workflows/feeds-probe.yml"]
   pull_request:
-    paths-ignore: ["**/*.md"]
+    paths-ignore: ["**/*.md", "scripts/probe/**", ".github/workflows/feeds-probe.yml"]
 
 concurrency:
   group: ci-${{ github.ref }}
