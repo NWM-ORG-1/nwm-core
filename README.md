@@ -139,6 +139,15 @@ npm run dev                          # http://localhost:3000
 | `E2E_BASE_URL=http://localhost:3000 npx playwright test e2e/newsroom.spec.ts` | 뉴스룸 흐름 (승격 → 편집 → 발행 → 독자 화면 즉시 반영 → 정정 → 비공개). `npm run dev` 상태에서 실행하며, 만든 데이터는 끝나면 지웁니다 |
 | `npm run verify` | 위 전체 |
 
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml`이 푸시와 PR마다 두 작업을 돌립니다 (각 3–4분).
+
+| 작업 | 내용 |
+|---|---|
+| Typecheck · lint · build · e2e | Postgres 서비스 → migrate + 샘플 시드 → 타입·린트 → 빌드 → 정적 감사 → 프로덕션 빌드 e2e → `next dev`에서 뉴스룸 흐름 e2e |
+| Docker image builds and serves | Railway와 같은 방식으로 이미지 빌드(마이그레이션·시드·프리렌더) → 컨테이너 실행 → 주요 경로 응답 확인 (`ADMIN_USERS` 없으면 `/admin`이 503으로 닫히는지 포함) |
+
 ## 다음 단계 메모
 
 - **피드 연동 (2단계)**
