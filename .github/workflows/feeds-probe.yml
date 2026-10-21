@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - "scripts/probe/**"
+      - "src/ingest/**"
       - ".github/workflows/feeds-probe.yml"
 
 concurrency:
@@ -28,3 +29,18 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/probe/raw-capture.mjs
+
+  adapters:
+    name: Adapters against live endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/probe/adapters.ts

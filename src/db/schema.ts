@@ -142,6 +142,20 @@ export const feedSources = pgTable(
     licReviewedBy: text("lic_reviewed_by"),
     lastFetchedAt: ts("last_fetched_at"),
     lastError: text("last_error"),
+    /* collector bookkeeping (phase 2 worker) */
+    /** null → due now */
+    nextRunAt: ts("next_run_at"),
+    /** a worker holds the source until then; a crashed worker's lease simply expires */
+    leaseUntil: ts("lease_until"),
+    lastSuccessAt: ts("last_success_at"),
+    /** consecutive failed runs; drives backoff and the error status */
+    failCount: integer("fail_count").notNull().default(0),
+    /** adapter cursor (since_id, seen ids, conditional-request validators) */
+    state: jsonb("state").$type<Record<string, unknown>>().notNull().default({}),
+    /** "catalog" rows are kept in step with src/ingest/catalog by `npm run sources:sync` */
+    origin: text("origin").notNull().default("manual"),
+    /** operator notes: why paused, what an agreement covers, what to check */
+    notes: text("notes").notNull().default(""),
     isSample: boolean("is_sample").notNull().default(false),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
@@ -397,9 +411,88 @@ export const sentimentSnapshots = pgTable(
     volume: integer("volume").notNull().default(0),
     sources: jsonb("sources").$type<SentimentSnapshot["sources"]>().notNull().default([]),
     keywords: text("keywords").array().notNull().default(sql`'{}'::text[]`),
+    /** inputs behind the score (standardised components, sample sizes) — published with the methodology */
+    components: jsonb("components").$type<Record<string, unknown>>().notNull().default({}),
+    /** 0–1: sample size and coverage of the hour */
+    confidence: real("confidence"),
+    /** "sample" for seeded rows, else the index method version ("v1") */
+    method: text("method").notNull().default("sample"),
+    /** computed but not public yet (shadow period before launch) */
+    shadow: boolean("shadow").notNull().default(false),
     isSample: boolean("is_sample").notNull().default(false),
   },
   (t) => [index("sentiment_scope_at_idx").on(t.scopeKey, t.at.desc())],
+);
+
+/** Time series behind quotes and the sentiment index (funding, open interest, premium, …). */
+export const marketMetrics = pgTable(
+  "market_metrics",
+  {
+    metric: text("metric").notNull(), // "funding_rate" | "open_interest_usd" | "long_short_ratio" | "kimchi_premium" | …
+    symbol: text("symbol").notNull(), // "BTC" | "MKT"
+    source: text("source").notNull(), // "bybit" | "binance" | "derived" | …
+    at: ts("at").notNull(),
+    value: doublePrecision("value").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.metric, t.symbol, t.source, t.at] }), index("market_metrics_at_idx").on(t.at)],
+);
+
+/**
+ * Community / social posts collected for the sentiment index. Not the editorial
+ * inbox: only numbers, ids and (briefly) text are kept — text is purged after
+ * scoring and the retention window.
+ */
+export const socialPosts = pgTable(
+  "social_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => feedSources.id, { onDelete: "cascade" }),
+    externalId: text("external_id").notNull(),
+    url: text("url"),
+    author: text("author"),
+    /** null once purged */
+    text: text("text"),
+    lang: text("lang").notNull().default("ko"),
+    postedAt: ts("posted_at").notNull(),
+    fetchedAt: ts("fetched_at").notNull().defaultNow(),
+    engagement: jsonb("engagement").$type<{ views?: number; likes?: number; comments?: number; shares?: number }>().notNull().default({}),
+    /** linked instruments: "BTC", "ETH", "005930" */
+    assets: text("assets").array().notNull().default(sql`'{}'::text[]`),
+    /** false → never sent to an LLM (no consent from the channel); rule-based counts only */
+    llmOk: boolean("llm_ok").notNull().default(true),
+    /** −1 bearish … +1 bullish; null until scored */
+    stance: real("stance"),
+    label: text("label"), // bull | bear | neutral | off_topic
+    scoredBy: text("scored_by"),
+    scoredAt: ts("scored_at"),
+  },
+  (t) => [
+    uniqueIndex("social_posts_source_external_uq").on(t.sourceId, t.externalId),
+    index("social_posts_posted_idx").on(t.postedAt.desc()),
+    index("social_posts_unscored_idx").on(t.fetchedAt).where(sql`scored_at is null`),
+  ],
+);
+
+/** One row per collector run or job run: the worker's flight recorder (kept two weeks). */
+export const ingestRuns = pgTable(
+  "ingest_runs",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    sourceId: uuid("source_id").references(() => feedSources.id, { onDelete: "cascade" }),
+    job: text("job").notNull(), // "source" | "sentiment.score" | "sentiment.index" | "market.derived" | "retention"
+    startedAt: ts("started_at").notNull().defaultNow(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    outcome: text("outcome").notNull(), // ok | not_modified | skipped | error
+    httpStatus: smallint("http_status"),
+    seen: integer("seen").notNull().default(0),
+    inserted: integer("inserted").notNull().default(0),
+    updated: integer("updated").notNull().default(0),
+    error: text("error"),
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index("ingest_runs_source_idx").on(t.sourceId, t.startedAt.desc()), index("ingest_runs_job_idx").on(t.job, t.startedAt.desc())],
 );
 
 /* ───────────────────────────── ops ───────────────────────────── */

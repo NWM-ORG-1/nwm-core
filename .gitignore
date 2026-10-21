@@ -48,3 +48,6 @@ next-env.d.ts
 /playwright-report
 /test-results
 /blob-report
+
+# worker bundle (npm run worker:build)
+/dist
