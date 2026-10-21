@@ -12,12 +12,12 @@ const BOT_UA = "NWM-FeedBot/1.0 (+https://newweb.media)";
 /**
  * marker: print windows around the first `count` occurrences instead of the head
  * tally: occurrences of each listed string, then the window after the first `marker` (or `fallback`)
+ * balance: closing tags that do not match the open element — where strict parsers lose structure
  */
 const CLIEN_TALLY = ['class="list_item', "symph_row", "data-board-sn", "<body", "list_subject", "subject_fixed"];
 const TARGETS = [
   // ── batch 4: Clien rows parse from the probe's capture but not in the collector — same page for both agents? ──
-  { name: "clien.probe-ua", url: "https://www.clien.net/service/board/cm_stock", tally: CLIEN_TALLY, marker: 'class="list_item', fallback: "<body", width: 1500 },
-  { name: "clien.bot-ua", url: "https://www.clien.net/service/board/cm_stock", ua: BOT_UA, tally: CLIEN_TALLY, marker: 'class="list_item', fallback: "<body", width: 1500 },
+  { name: "clien.balance", url: "https://www.clien.net/service/board/cm_stock", ua: BOT_UA, tally: CLIEN_TALLY, balance: 12 },
 ];
 
 function charsetOf(contentType, bytes) {
@@ -59,6 +59,38 @@ async function followWithCookies(url, ua = UA) {
   throw new Error("too many redirects");
 }
 
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+/** Same raw-text elements as the collector's parser settings (script, style, noscript). */
+const RAW = new Set(["script", "style", "noscript"]);
+
+function balance(html, limit) {
+  const re = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][\w:-]*)((?:\s+[^>]*?(?:'[^']*'|"[^"]*")?)*)\s*(\/?)>/g;
+  const stack = [];
+  const out = [];
+  for (let m; (m = re.exec(html)) && out.length < limit; ) {
+    if (m[0].startsWith("<!--")) continue;
+    const [, closing, name, , selfClosing] = m;
+    const lower = name.toLowerCase();
+    if (!closing) {
+      if (RAW.has(lower)) {
+        const end = html.indexOf(`</${name}>`, re.lastIndex);
+        re.lastIndex = end < 0 ? html.length : end + name.length + 3;
+      } else if (!selfClosing && !VOID.has(lower)) stack.push({ name, at: m.index });
+      continue;
+    }
+    const top = stack[stack.length - 1];
+    if (top && top.name === name) {
+      stack.pop();
+      continue;
+    }
+    const depth = stack.map((x) => x.name.toLowerCase()).lastIndexOf(lower);
+    const where = depth < 0 ? "nothing open matches" : `${stack.length - 1 - depth} element(s) open inside it`;
+    out.push(`@${m.index} </${name}> while <${top?.name ?? "-"}> @${top?.at ?? -1} is open (${where}): …${html.slice(Math.max(0, m.index - 220), m.index + 12).replace(/\s+/g, " ")}`);
+    if (depth >= 0) stack.length = depth; // recover as a browser would, to find the next one
+  }
+  return out;
+}
+
 const clip = (s) => s.replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
 
 async function capture(t) {
@@ -87,11 +119,15 @@ async function capture(t) {
       if (v) lines.push(`${h}: ${v}`);
     }
     if (t.head) lines.push("--- head ---", clip(text.slice(0, t.head)));
+    if (t.balance) {
+      const found = balance(text, t.balance);
+      lines.push(`--- balance: ${found.length ? `${found.length} mismatch(es)${found.length === t.balance ? " (first ones)" : ""}` : "every closing tag matches"} ---`, ...found);
+    }
     if (t.tally) {
       lines.push(`--- counts: ${t.tally.map((k) => `${k}=${text.split(k).length - 1}`).join(" · ")}`);
       const key = text.includes(t.marker) ? t.marker : t.fallback;
       const at = key ? text.indexOf(key) : -1;
-      lines.push(`--- window after ${JSON.stringify(key)} @${at} ---`, at < 0 ? "(none)" : text.slice(at, at + (t.width ?? 800)).replace(/\s+/g, " "));
+      if (key) lines.push(`--- window after ${JSON.stringify(key)} @${at} ---`, at < 0 ? "(none)" : text.slice(at, at + (t.width ?? 800)).replace(/\s+/g, " "));
     } else if (t.marker) {
       let from = 0;
       for (let i = 0; i < (t.count ?? 1); i++) {

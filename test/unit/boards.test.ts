@@ -57,6 +57,37 @@ describe("community list presets (live markup)", () => {
   });
 });
 
+describe("board markup with unclosed tags", () => {
+  // every row leaves <span class="nick"> open, so the next row is parsed inside it
+  const row = (n: number, views?: number) =>
+    `<div class="item" data-sn="${n}"><a class="subject" href="/p/${n}">글 ${n}</a><span class="nick"><b>닉${n}</b>` +
+    (views === undefined ? "" : `<span class="hit">${views}</span>`) +
+    `<span class="ts">2026-10-21 0${n}:00:00</span></div>`;
+  const html = `<!DOCTYPE HTML><html><head><title>목록</title></head><body><div class="list">${row(1, 10)}${row(2)}${row(3, 30)}</div></body></html>`;
+  const c = {
+    row: "div.item",
+    fields: { id: { attr: "data-sn" }, title: { sel: "a.subject" }, link: { sel: "a.subject", attr: "href" }, time: { sel: ".ts" }, views: { sel: ".hit" } },
+    maxRows: 10,
+  };
+
+  it("keeps every row and reads only each row's own fields", () => {
+    const rows = readRows(html, "https://board.example/list", c, NOW);
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      ["1", "2", "3"],
+    );
+    assert.deepEqual(
+      rows.map((r) => r.views),
+      [10, undefined, 30],
+    );
+    assert.deepEqual(
+      rows.map((r) => r.time?.toISOString()),
+      ["2026-10-20T16:00:00.000Z", "2026-10-20T17:00:00.000Z", "2026-10-20T18:00:00.000Z"],
+    );
+    assert.equal(rows[1].link, "https://board.example/p/2");
+  });
+});
+
 describe("telegram t.me/s", () => {
   it("reads id, text, views and time; media without caption has empty text", () => {
     const page = parseChannelPage(fixture("telegram-channel.html"), "coinnesskr");

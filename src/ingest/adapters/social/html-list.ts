@@ -147,6 +147,15 @@ interface Row {
   likes?: number;
 }
 
+/**
+ * Real pages leave tags unclosed. By default the parser deletes elements still
+ * open at the end of the document (and with them `<body>` and every list row);
+ * keeping them leaves rows in the tree, possibly nested inside one another.
+ */
+function parseHtml(html: string): HTMLElement {
+  return parse(html, { blockTextElements: { script: false, style: false, noscript: false }, parseNoneClosedTags: true });
+}
+
 /** Exported for fixtures: list HTML → rows. */
 export function readRows(
   html: string,
@@ -154,39 +163,51 @@ export function readRows(
   c: Pick<Cfg, "row" | "fields" | "skip" | "maxRows" | "include" | "exclude" | "stripTitle"> & { skipIf?: Cfg["skipIf"] },
   now = new Date(),
 ): Row[] {
-  const root = parse(html, { blockTextElements: { script: false, style: false, noscript: false } });
+  const root = parseHtml(html);
   const strip = c.stripTitle ? new RegExp(c.stripTitle, "g") : null;
   const skipIf = c.skipIf ? { sel: c.skipIf.sel, re: new RegExp(c.skipIf.regex) } : null;
+  const all = root.querySelectorAll(c.row);
+  const rows = new Set(all);
   const out: Row[] = [];
   const ids = new Set<string>();
-  for (const el of root.querySelectorAll(c.row)) {
+  for (const el of all) {
     if (out.length >= c.maxRows) break;
-    if (c.skip && el.querySelector(c.skip)) continue;
-    if (skipIf && skipIf.re.test(read(el, { sel: skipIf.sel }))) continue;
-    const id = read(el, c.fields.id);
-    let title = read(el, c.fields.title);
+    const get = (f: z.infer<typeof field>) => read(el, f, rows);
+    if (c.skip && own(el, c.skip, rows)) continue;
+    if (skipIf && skipIf.re.test(get({ sel: skipIf.sel }))) continue;
+    const id = get(c.fields.id);
+    let title = get(c.fields.title);
     if (!id || !title || ids.has(id)) continue;
     if (strip) title = oneLine(title.replace(strip, ""));
     if (!title || !passesKeywords(title, c.include, c.exclude)) continue;
     ids.add(id);
-    const href = c.fields.link ? read(el, c.fields.link) : undefined;
-    const time = c.fields.time ? read(el, c.fields.time) : undefined;
+    const href = c.fields.link ? get(c.fields.link) : undefined;
+    const time = c.fields.time ? get(c.fields.time) : undefined;
     out.push({
       id,
       title: clip(title, 300),
       link: absUrl(href, baseUrl),
       time: time ? parseKstDate(time, now) : undefined,
-      author: c.fields.author ? read(el, c.fields.author) || undefined : undefined,
-      views: c.fields.views ? parseCount(read(el, c.fields.views)) : undefined,
-      comments: c.fields.comments ? (parseCount(read(el, c.fields.comments)) ?? 0) : undefined,
-      likes: c.fields.likes ? parseCount(read(el, c.fields.likes)) : undefined,
+      author: c.fields.author ? get(c.fields.author) || undefined : undefined,
+      views: c.fields.views ? parseCount(get(c.fields.views)) : undefined,
+      comments: c.fields.comments ? (parseCount(get(c.fields.comments)) ?? 0) : undefined,
+      likes: c.fields.likes ? parseCount(get(c.fields.likes)) : undefined,
     });
   }
   return out;
 }
 
-function read(row: HTMLElement, f: z.infer<typeof field>): string {
-  const el = f.sel ? row.querySelector(f.sel) : row;
+/** First match inside `row` that belongs to it, not to a row nested in it. */
+function own(row: HTMLElement, sel: string, rows: Set<HTMLElement>): HTMLElement | undefined {
+  return row.querySelectorAll(sel).find((el) => {
+    let n: HTMLElement | null = el;
+    while (n && !rows.has(n)) n = n.parentNode;
+    return n === row;
+  });
+}
+
+function read(row: HTMLElement, f: z.infer<typeof field>, rows: Set<HTMLElement>): string {
+  const el = f.sel ? own(row, f.sel, rows) : row;
   if (!el) return "";
   let v = f.attr ? (el.getAttribute(f.attr) ?? "") : el.textContent;
   v = oneLine(decodeText(v));
@@ -199,7 +220,7 @@ function read(row: HTMLElement, f: z.infer<typeof field>): string {
 
 /** What came back instead of a list: the page title and the start of its text. */
 function describePage(html: string): string {
-  const root = parse(html, { blockTextElements: { script: false, style: false, noscript: false } });
+  const root = parseHtml(html);
   const title = oneLine(root.querySelector("title")?.textContent ?? "");
   const body = oneLine(root.querySelector("body")?.textContent ?? root.textContent).slice(0, 140);
   return `페이지 제목 “${title || "(없음)"}”, 본문 “${body || "(비어 있음)"}” (${html.length}자). 차단 페이지이거나 구조가 바뀌었을 수 있습니다`;
