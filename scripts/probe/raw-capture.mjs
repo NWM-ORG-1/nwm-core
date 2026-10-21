@@ -5,14 +5,19 @@
  *
  *   node scripts/probe/raw-capture.mjs [name-filter]
  */
-const UA = "NWM-FeedProbe/1.0 (+https://newweb.media)";
+import { createHash } from "node:crypto";
 
-/** marker: print windows around the first `count` occurrences instead of the head */
+const UA = "NWM-FeedProbe/1.0 (+https://newweb.media)";
+/** what the collector itself sends (src/ingest/http.ts) */
+const BOT_UA = "NWM-FeedBot/1.0 (+https://newweb.media)";
+
+/**
+ * marker: print windows around the first `count` occurrences instead of the head
+ * dump: print the whole body as base64 lines (rebuild it from the job log to debug a parser locally)
+ */
 const TARGETS = [
-  // ── batch 3: rows and forms still unverified ──
-  { name: "ppomppu.rows", url: "https://www.ppomppu.co.kr/zboard/zboard.php?id=stock", cookies: true, marker: "baseList-title", count: 4, width: 900, before: 1200 },
-  { name: "motir.rss-post", url: "https://www.motir.go.kr/kor/article/ATCL3f49a5a8c/rss", method: "POST", head: 1800 },
-  { name: "motir.rss-get", url: "https://www.motir.go.kr/kor/article/ATCL3f49a5a8c/rss", head: 600 },
+  // ── batch 4: the Clien list page as the collector receives it (rows do not parse) ──
+  { name: "clien.page", url: "https://www.clien.net/service/board/cm_stock", ua: BOT_UA, dump: true },
 ];
 
 function charsetOf(contentType, bytes) {
@@ -24,13 +29,13 @@ function charsetOf(contentType, bytes) {
 }
 
 /** Some boards set a cookie and redirect once (cookie check); carry cookies by hand. */
-async function followWithCookies(url) {
+async function followWithCookies(url, ua = UA) {
   const jar = new Map();
   let current = url;
   for (let hop = 0; hop < 6; hop++) {
     const res = await fetch(current, {
       headers: {
-        "user-agent": UA,
+        "user-agent": ua,
         accept: "*/*",
         "accept-language": "ko-KR,ko;q=0.9,en;q=0.8",
         cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "),
@@ -59,9 +64,9 @@ const clip = (s) => s.replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
 async function capture(t) {
   const started = Date.now();
   try {
-    const res = t.cookies ? await followWithCookies(t.url) : await fetch(t.url, {
+    const res = t.cookies ? await followWithCookies(t.url, t.ua) : await fetch(t.url, {
       method: t.method ?? "GET",
-      headers: { "user-agent": UA, accept: "*/*", "accept-language": "ko-KR,ko;q=0.9,en;q=0.8" },
+      headers: { "user-agent": t.ua ?? UA, accept: "*/*", "accept-language": "ko-KR,ko;q=0.9,en;q=0.8" },
       redirect: "follow",
       signal: AbortSignal.timeout(20_000),
     });
@@ -82,6 +87,12 @@ async function capture(t) {
       if (v) lines.push(`${h}: ${v}`);
     }
     if (t.head) lines.push("--- head ---", clip(text.slice(0, t.head)));
+    if (t.dump) {
+      const b64 = Buffer.from(bytes).toString("base64");
+      lines.push(`--- dump sha256=${createHash("sha256").update(bytes).digest("hex")} bytes=${bytes.length} base64 lines follow ---`);
+      for (let i = 0; i < b64.length; i += 2000) lines.push(`B64 ${b64.slice(i, i + 2000)}`);
+      lines.push("--- dump end ---");
+    }
     if (t.marker) {
       let from = 0;
       for (let i = 0; i < (t.count ?? 1); i++) {
