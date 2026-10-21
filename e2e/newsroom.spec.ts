@@ -44,11 +44,18 @@ function db() {
 /**
  * Waits until React has hydrated a control. Typing into a controlled field before that
  * can be partly undone when hydration re-applies the server value (seen under `next dev`,
- * where hydration takes a few seconds).
+ * where hydration takes a few seconds). A cold `next dev` may also reload the page once
+ * while it compiles the route, so a probe that loses its page just tries again.
  */
 async function hydrated(control: Locator) {
   await expect
-    .poll(() => control.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$"))), { timeout: 20_000 })
+    .poll(
+      () =>
+        control
+          .evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$")))
+          .catch(() => false),
+      { timeout: 30_000 },
+    )
     .toBe(true);
   return control;
 }

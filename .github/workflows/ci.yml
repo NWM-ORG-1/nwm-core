@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    paths-ignore: ["**/*.md"]
+  pull_request:
+    paths-ignore: ["**/*.md"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  DATABASE_URL: postgres://nwm:nwm@localhost:5432/nwm
+  INTERNAL_API_SECRET: dev-internal-secret
+  SCHEDULER: "off"
+  NEXT_PUBLIC_SITE_URL: http://localhost:3100
+
+jobs:
+  verify:
+    name: Typecheck · lint · build · e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nwm
+          POSTGRES_PASSWORD: nwm
+          POSTGRES_DB: nwm
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nwm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Database (migrate + sample content)
+        run: npm run db:migrate && npm run db:seed
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: Every public page is fully static
+        run: npm run audit:build
+
+      - name: Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # newsroom.spec skips itself here: `next start` without ADMIN_USERS has no newsroom (503) by design.
+      - name: E2E against the production build
+        run: npm run test:e2e
+
+      # The newsroom flow uses the development-only login (admin / nwm-dev), so it runs against `next dev`.
+      - name: Newsroom E2E against next dev
+        run: |
+          npx next dev -p 3000 > next-dev.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:3000/api/health > /dev/null && break; sleep 2; done
+          # compile the routes once so the first browser visit doesn't race a dev reload
+          for p in /admin /admin/settings /admin/feeds /admin/candidates /admin/articles / /latest /corrections; do
+            curl -s -o /dev/null -u admin:nwm-dev "http://localhost:3000$p" || true
+          done
+          E2E_BASE_URL=http://localhost:3000 npx playwright test e2e/newsroom.spec.ts --project=desktop
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: |
+            test-results
+            next-dev.log
+          retention-days: 7
+
+  docker:
+    name: Docker image builds and serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nwm
+          POSTGRES_PASSWORD: nwm
+          POSTGRES_DB: nwm
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nwm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v5
+
+      # Same path as Railway: the build migrates, seeds an empty database and prerenders from it.
+      - name: Build the image
+        run: |
+          docker build --network=host \
+            --build-arg DATABASE_PUBLIC_URL=postgres://nwm:nwm@localhost:5432/nwm \
+            --build-arg SEED_ON_EMPTY=1 \
+            --build-arg NEXT_PUBLIC_SITE_URL=http://localhost:3000 \
+            --build-arg RAILWAY_GIT_COMMIT_SHA=${{ github.sha }} \
+            -t nwm:ci .
+
+      - name: Run the image and check key routes
+        run: |
+          docker run -d --name nwm --network=host \
+            -e DATABASE_URL=postgres://nwm:nwm@localhost:5432/nwm \
+            -e INTERNAL_API_SECRET=ci-only-secret-not-used-elsewhere \
+            -e SCHEDULER=off \
+            nwm:ci
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/api/health > /dev/null && break; sleep 2; done
+          check() {
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000$1")
+            echo "$1 → $code"
+            test "$code" = "$2"
+          }
+          check /api/health 200
+          check / 200
+          check /latest 200
+          check /ai 200
+          check /sentiment 200
+          check /rss.xml 200
+          check /sitemap.xml 200
+          check /a/000000-zzzzzz 404
+          # no ADMIN_USERS in this container: the newsroom must fail closed
+          check /admin 503
+
+      - name: Container logs
+        if: always()
+        run: docker logs nwm 2>&1 | tail -100 || true
