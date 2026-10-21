@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { db } from "@/db/client";
 import { experiments, feedItems, feedSources, type FeedItemStatus } from "@/db/schema";
 import type { InboxFilters } from "@/data/admin";
+import { collectorEnv } from "@/data/admin-ingest";
 import { adapterCatalog } from "@/ingest/registry";
 import { requireStaff } from "@/server/auth";
 
@@ -125,8 +126,9 @@ export async function getSourceFormOptions() {
   await requireStaff();
   const rows = await db.select({ id: feedSources.id, slug: feedSources.slug, name: feedSources.name, adapter: feedSources.adapter }).from(feedSources);
   const catalog = adapterCatalog();
-  // which credentials are configured on this server — names only, never values
-  const envPresent = Object.fromEntries(catalog.flatMap((a) => a.envVars).map((v) => [v.name, Boolean(process.env[v.name]?.trim())]));
+  // which credentials the collector has — names only, never values
+  const { env } = await collectorEnv();
+  const envPresent = Object.fromEntries(catalog.flatMap((a) => a.envVars).map((v) => [v.name, Boolean(env[v.name]?.trim())]));
   return {
     adapters: [...new Set(["manual", ...rows.map((r) => r.adapter)])].sort(),
     slugs: rows.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),

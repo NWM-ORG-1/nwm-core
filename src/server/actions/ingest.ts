@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { feedSources, sentimentSnapshots, siteSettings } from "@/db/schema";
+import { collectorEnv } from "@/data/admin-ingest";
 import { executeAdapter } from "@/ingest/execute";
 import { HostLimiter } from "@/ingest/http";
 import { ConfigError } from "@/ingest/types";
@@ -82,7 +83,13 @@ export async function testSource(input: { id: string; configJson?: string }): Pr
         metrics: (r.metrics ?? []).slice(-6).map((m) => ({ metric: m.metric, symbol: m.symbol, at: m.at.toISOString(), value: m.value })),
       });
     } catch (err) {
-      const msg = err instanceof ConfigError ? err.message : `수집 실패: ${(err as Error).message}`;
+      let msg = err instanceof ConfigError ? err.message : `수집 실패: ${(err as Error).message}`;
+      if (err instanceof ConfigError && msg.startsWith("키 필요")) {
+        // the dry run runs here, in the web service — the worker may hold keys this process lacks
+        const { env } = await collectorEnv();
+        const onWorker = msg.slice(msg.indexOf(":") + 1).split(",").map((n) => n.trim()).filter((n) => env[n]);
+        if (onWorker.length) msg += ` — 수집 워커에는 있는 키입니다. 미리 실행은 웹 서비스에서 돌기 때문에 웹 서비스 변수에도 같은 키(${onWorker.join(", ")})가 있어야 합니다.`;
+      }
       return { ok: false, error: msg, code: err instanceof ConfigError ? "config" : "fetch", at: Date.now() };
     }
   } catch (e) {

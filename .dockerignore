@@ -7,3 +7,4 @@ e2e/.screens
 playwright-report
 test-results
 *.log
+dist

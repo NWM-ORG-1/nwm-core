@@ -28,12 +28,31 @@ export interface WorkerBeat {
   running?: number;
   concurrency?: number;
   paused?: boolean;
+  /** credential names set on the worker — values never leave it */
+  keys?: string[];
+  llm?: { model: string; budgetUsd: number };
+}
+
+/**
+ * Keys and AI settings as the collector sees them. In production the worker is
+ * its own service with its own variables and reports them in its heartbeat;
+ * until a worker has reported, this server's variables stand in.
+ */
+function collectorEnvOf(beat: WorkerBeat | undefined) {
+  const env: Record<string, string | undefined> = beat?.keys ? Object.fromEntries(beat.keys.map((k) => [k, "set"])) : process.env;
+  const llm = beat?.llm ?? { model: process.env.SENTIMENT_MODEL?.trim() || "claude-haiku-5-5", budgetUsd: Number(process.env.SENTIMENT_LLM_MONTHLY_USD ?? 30) };
+  return { env, llm: { ...llm, enabled: Boolean(env.ANTHROPIC_API_KEY?.trim()) } };
+}
+
+export async function collectorEnv() {
+  return collectorEnvOf(await setting<WorkerBeat>("worker.heartbeat"));
 }
 
 export async function getIngestOverview() {
   await connection();
   await requireStaff();
   const [beat, ingest] = await Promise.all([setting<WorkerBeat>("worker.heartbeat"), setting<{ paused?: boolean }>("ingest")]);
+  const collector = collectorEnvOf(beat);
 
   const sources = await db.execute<{
     id: string;
@@ -114,8 +133,8 @@ export async function getIngestOverview() {
     jobs: jobs.map((j) => ({ job: j.job, at: new Date(j.started_at).toISOString(), outcome: j.outcome, durationMs: j.duration_ms, note: j.note, error: j.error })),
     spend: {
       llmUsd: Number(spend?.llm_usd ?? 0),
-      llmBudgetUsd: Number(process.env.SENTIMENT_LLM_MONTHLY_USD ?? 30),
-      llmEnabled: Boolean(process.env.ANTHROPIC_API_KEY),
+      llmBudgetUsd: collector.llm.budgetUsd,
+      llmEnabled: collector.llm.enabled,
       xPosts: Number(spend?.x_posts ?? 0),
     },
   };
@@ -135,9 +154,10 @@ export async function getSourceHealth(id: string) {
     .orderBy(desc(ingestRuns.startedAt))
     .limit(10);
   const adapter = getAdapter(s.adapter);
+  const { env } = await collectorEnv();
   return {
     adapter: adapter ? { key: adapter.key, label: adapter.label, description: adapter.description, defaultPollSec: adapter.defaultPollSec } : null,
-    credentials: credentialStatus({ adapter: s.adapter, auth: s.auth }).map((c) => ({ name: c.name, required: c.required, help: c.help, present: c.present })),
+    credentials: credentialStatus({ adapter: s.adapter, auth: s.auth }, env).map((c) => ({ name: c.name, required: c.required, help: c.help, present: c.present })),
     notes: s.notes,
     origin: s.origin,
     isSample: s.isSample,
@@ -184,6 +204,7 @@ export async function getSentimentAdmin() {
   const [spend] = await db.execute<{ usd: number }>(sql`
     select coalesce(sum((meta->>'costUsd')::float8), 0) as usd from ingest_runs
     where job = 'sentiment.score' and started_at >= date_trunc('month', now())`);
+  const { llm } = await collectorEnv();
   return {
     public: Boolean(settings.public),
     publicSince: settings.publicSince ?? null,
@@ -206,7 +227,7 @@ export async function getSentimentAdmin() {
     fearGreed: fng.map((p) => ({ at: p.at.toISOString(), value: p.value })),
     scoring: scoring.map((r) => ({ by: r.scored_by ?? "대기", label: r.label ?? "—", n: r.n })),
     queue: queue?.n ?? 0,
-    llm: { usd: Number(spend?.usd ?? 0), budgetUsd: Number(process.env.SENTIMENT_LLM_MONTHLY_USD ?? 30), enabled: Boolean(process.env.ANTHROPIC_API_KEY), model: process.env.SENTIMENT_MODEL || "claude-haiku-5-5" },
+    llm: { usd: Number(spend?.usd ?? 0), ...llm },
   };
 }
 

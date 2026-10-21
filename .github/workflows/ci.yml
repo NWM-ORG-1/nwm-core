@@ -141,6 +141,30 @@ jobs:
           # no ADMIN_USERS in this container: the newsroom must fail closed
           check /admin 503
 
+      # The second Railway service. Catalog sync is off, so it fetches nothing here: it
+      # waits for migrations, runs its periodic jobs, beats, and stops on SIGTERM.
+      - name: Worker image builds, runs and stops cleanly
+        run: |
+          docker build -f Dockerfile.worker -t nwm-worker:ci .
+          docker run -d --name nwm-worker --network=host \
+            -e DATABASE_URL=postgres://nwm:nwm@localhost:5432/nwm \
+            -e WORKER_SYNC_CATALOG=0 \
+            -e REVALIDATE_URL=http://localhost:3000 \
+            -e INTERNAL_API_SECRET=ci-only-secret-not-used-elsewhere \
+            nwm-worker:ci
+          for i in $(seq 1 30); do docker logs nwm-worker 2>&1 | grep -q "worker started" && break; sleep 2; done
+          sleep 15
+          docker stop -t 30 nwm-worker
+          docker logs nwm-worker 2>&1 | tail -40
+          docker logs nwm-worker 2>&1 | grep -q "worker started"
+          docker logs nwm-worker 2>&1 | grep -q "worker stopped"
+          if docker logs nwm-worker 2>&1 | grep -E "tick failed|worker failed|\] error:"; then exit 1; fi
+          beat=$(docker run --rm --network=host postgres:16-alpine psql postgres://nwm:nwm@localhost:5432/nwm -Atc "select value->>'at' from site_settings where key = 'worker.heartbeat'")
+          echo "heartbeat: $beat"
+          test -n "$beat"
+
       - name: Container logs
         if: always()
-        run: docker logs nwm 2>&1 | tail -100 || true
+        run: |
+          docker logs nwm 2>&1 | tail -100 || true
+          docker logs nwm-worker 2>&1 | tail -60 || true
