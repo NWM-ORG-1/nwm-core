@@ -718,6 +718,7 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
                 scheduledAt={c.scheduledAt}
                 ai={ai}
                 editorName={bundle.me.name}
+                editorPlaceholder={bundle.me.placeholder}
                 byline={byline}
                 storyTitle={storyTitle}
                 checks={checks}

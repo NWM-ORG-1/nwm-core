@@ -184,6 +184,9 @@ export function ReaderShell({ slug, beat, tags, readSeconds, fallback, children 
       });
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    // Already past the end when this mounts (restored scroll, or a jump before hydration):
+    // no scroll event or intersection will follow, so check once now.
+    onScroll();
     document.addEventListener("visibilitychange", onVis);
     return () => {
       flush();

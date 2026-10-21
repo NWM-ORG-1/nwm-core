@@ -135,7 +135,8 @@ npm run dev                          # http://localhost:3000
 | `npm run db:seed [-- --if-empty]` | 샘플 데이터 (재실행하면 샘플을 갈아끼우고 시각을 지금으로 맞춤) |
 | `npm run db:purge-samples` | 샘플 데이터 삭제 (실행 중인 서버의 캐시도 갱신) |
 | `npm run audit:build` | 공개 라우트가 모두 정적인지 빌드 결과를 검사 |
-| `npm run test:e2e` | Playwright (공개·읽기 흐름·뉴스룸·성능 예산) |
+| `npm run test:e2e` | Playwright (공개·읽기 흐름·회귀·성능 예산). 프로덕션 서버에 `ADMIN_USERS`가 없으면 뉴스룸 흐름은 건너뜁니다 |
+| `E2E_BASE_URL=http://localhost:3000 npx playwright test e2e/newsroom.spec.ts` | 뉴스룸 흐름 (승격 → 편집 → 발행 → 독자 화면 즉시 반영 → 정정 → 비공개). `npm run dev` 상태에서 실행하며, 만든 데이터는 끝나면 지웁니다 |
 | `npm run verify` | 위 전체 |
 
 ## 다음 단계 메모

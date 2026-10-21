@@ -60,10 +60,13 @@ test.describe("reading flow", () => {
     const href = await first.getAttribute("href");
     await first.click();
     await expect(page).toHaveURL(new RegExp(`${href}$`));
-    await page.waitForTimeout(400);
-    // mark as read deterministically (end of article reached)
+    await expect(page.locator("#article-title")).toBeVisible();
+    // reaching the end of the article marks it read on-device
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(800);
+    const slug = href!.slice(3);
+    await expect
+      .poll(() => page.evaluate((s) => JSON.parse(localStorage.getItem("nwm:read") || "{}")[s]?.done === true, slug), { timeout: 10_000 })
+      .toBe(true);
     await page.goBack();
     await expect(page.locator(`li[data-read="true"] a[href="${href}"]`)).toHaveCount(1);
   });

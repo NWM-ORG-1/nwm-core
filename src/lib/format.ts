@@ -59,6 +59,20 @@ export function relTime(iso: string, now: number): string {
   return dateKST(iso);
 }
 
+/** Age of a timestamp ("38분 전", "3일 전", "2개월 전"); the caller supplies `now` (browser clock). */
+export function ageLabel(iso: string, now: number): string {
+  const m = Math.floor(Math.max(0, now - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "방금";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}일 전`;
+  if (d < 30) return `${Math.floor(d / 7)}주 전`;
+  if (d < 365) return `${Math.floor(d / 30)}개월 전`;
+  return `${Math.floor(d / 365)}년 전`;
+}
+
 /* ─────────────────────────── numbers ─────────────────────────── */
 
 export function fmtPrice(price: number, currency: string, symbol?: string): string {

@@ -54,13 +54,26 @@ export function ArticleView({ a }: { a: ArticleFull }) {
             <span>
               {dateKST(a.publishedAt)} {clockKST(a.publishedAt)}
             </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-block min-w-[3.5em]">
-              <LocalTime iso={a.publishedAt} />
-            </span>
-            {updated && <span title={dateTimeKST(a.updatedAt)}>· 수정 {clockKST(a.updatedAt)}</span>}
+            {updated && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span title={dateTimeKST(a.updatedAt)}>수정 {clockKST(a.updatedAt)}</span>
+              </>
+            )}
             <span aria-hidden="true">·</span>
             <span>{readTimeLabel(a.readSeconds)} 읽기</span>
+            {/* Reserved at the end of the row: the age appears after hydration without moving anything. */}
+            <span className="inline-block min-w-[6em]">
+              <LocalTime
+                iso={a.publishedAt}
+                mode="age"
+                prefix={
+                  <span aria-hidden="true" className="mr-2.5">
+                    ·
+                  </span>
+                }
+              />
+            </span>
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <AiBadge value={a.aiInvolvement} editorName={a.editor?.name ?? a.author?.name} variant="long" />

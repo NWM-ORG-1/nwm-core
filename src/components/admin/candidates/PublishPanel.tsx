@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState, useTransition, type Ref } from "react";
 import type { AiInvolvement, CandidateStatus, CheckResult } from "@/db/schema";
 import { AI_LABEL, aiLabelLong } from "@/lib/labels";
@@ -27,6 +28,7 @@ export function PublishPanel({
   scheduledAt,
   ai,
   editorName,
+  editorPlaceholder = false,
   byline,
   storyTitle,
   checks,
@@ -48,6 +50,8 @@ export function PublishPanel({
   scheduledAt: string | null;
   ai: AiInvolvement;
   editorName: string;
+  /** the signed-in account is still the first-login "편집국"; publishCandidate refuses to sign with it */
+  editorPlaceholder?: boolean;
   byline: string;
   storyTitle: string | null;
   checks: CheckResult[];
@@ -174,6 +178,15 @@ export function PublishPanel({
           <dt className="text-fg-4">스토리</dt>
           <dd className={storyTitle ? "text-fg-2" : "text-fg-4"}>{storyTitle ?? "연결 안 함"}</dd>
         </dl>
+        {ai !== "auto" && editorPlaceholder && (
+          <p role="note" className="mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] leading-relaxed text-warn">
+            책임 편집자 이름이 아직 임시값(‘{editorName}’)입니다. 독자에게 공개되는 이름이므로{" "}
+            <Link href="/admin/settings" className="font-semibold underline underline-offset-2">
+              설정 → 내 편집자 프로필
+            </Link>
+            에서 실명을 입력해야 발행할 수 있습니다.
+          </p>
+        )}
       </section>
 
       {/* checks */}

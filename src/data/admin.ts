@@ -7,7 +7,6 @@ import {
   articleCorrections,
   articleRevisions,
   articles,
-  candidateItems,
   candidates,
   correctionRequests,
   experiments,
@@ -490,7 +489,7 @@ export async function getCandidateBundle(id: string) {
     ? await db.query.articles.findFirst({ where: eq(articles.id, c.articleId), columns: { slug: true, status: true } })
     : null;
   return {
-    me: { id: me.id, name: me.name },
+    me: { id: me.id, name: me.name, placeholder: isPlaceholderStaff(me) },
     candidate: {
       id: c.id,
       status: c.status,

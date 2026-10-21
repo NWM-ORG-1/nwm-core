@@ -10,8 +10,12 @@ for (const path of ["/", "__article__"]) {
   test(`budgets: ${path}`, async ({ page, baseURL }) => {
     let url = path;
     if (path === "__article__") {
-      await page.goto("/latest");
-      url = (await page.locator("main ol a[data-row-link]").first().getAttribute("href"))!;
+      // Read the link in a throwaway page: a prefetch the outgoing page starts during navigation
+      // can stay "pending" in Playwright forever, and networkidle below would never settle.
+      const probe = await page.context().newPage();
+      await probe.goto("/latest");
+      url = (await probe.locator("main ol a[data-row-link]").first().getAttribute("href"))!;
+      await probe.close();
     }
     const origins = new Set<string>();
     page.on("request", (r) => origins.add(new URL(r.url()).origin));
