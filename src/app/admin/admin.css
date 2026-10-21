@@ -1,0 +1,10 @@
+/*
+ * Utilities used only by the newsroom (/admin), loaded by the admin layout on top of
+ * globals.css (which skips the admin sources). The theme mapping and custom utilities
+ * are referenced from theme.css; rules land in the same cascade layers as globals.css.
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@reference "../theme.css";
+@source "./";
+@source "../../components/admin";

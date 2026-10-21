@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { MobileAdminBar, MobileAdminBarFrame, Sidebar } from "@/components/admin/Sidebar";
+import "./admin.css";
 
 export const metadata: Metadata = {
   title: { default: "뉴스룸", template: "%s · NWM 뉴스룸" },
