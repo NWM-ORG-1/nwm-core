@@ -5,19 +5,19 @@
  *
  *   node scripts/probe/raw-capture.mjs [name-filter]
  */
-import { createHash } from "node:crypto";
-
 const UA = "NWM-FeedProbe/1.0 (+https://newweb.media)";
 /** what the collector itself sends (src/ingest/http.ts) */
 const BOT_UA = "NWM-FeedBot/1.0 (+https://newweb.media)";
 
 /**
  * marker: print windows around the first `count` occurrences instead of the head
- * dump: print the whole body as base64 lines (rebuild it from the job log to debug a parser locally)
+ * tally: occurrences of each listed string, then the window after the first `marker` (or `fallback`)
  */
+const CLIEN_TALLY = ['class="list_item', "symph_row", "data-board-sn", "<body", "list_subject", "subject_fixed"];
 const TARGETS = [
-  // ── batch 4: the Clien list page as the collector receives it (rows do not parse) ──
-  { name: "clien.page", url: "https://www.clien.net/service/board/cm_stock", ua: BOT_UA, dump: true },
+  // ── batch 4: Clien rows parse from the probe's capture but not in the collector — same page for both agents? ──
+  { name: "clien.probe-ua", url: "https://www.clien.net/service/board/cm_stock", tally: CLIEN_TALLY, marker: 'class="list_item', fallback: "<body", width: 1500 },
+  { name: "clien.bot-ua", url: "https://www.clien.net/service/board/cm_stock", ua: BOT_UA, tally: CLIEN_TALLY, marker: 'class="list_item', fallback: "<body", width: 1500 },
 ];
 
 function charsetOf(contentType, bytes) {
@@ -87,13 +87,12 @@ async function capture(t) {
       if (v) lines.push(`${h}: ${v}`);
     }
     if (t.head) lines.push("--- head ---", clip(text.slice(0, t.head)));
-    if (t.dump) {
-      const b64 = Buffer.from(bytes).toString("base64");
-      lines.push(`--- dump sha256=${createHash("sha256").update(bytes).digest("hex")} bytes=${bytes.length} base64 lines follow ---`);
-      for (let i = 0; i < b64.length; i += 2000) lines.push(`B64 ${b64.slice(i, i + 2000)}`);
-      lines.push("--- dump end ---");
-    }
-    if (t.marker) {
+    if (t.tally) {
+      lines.push(`--- counts: ${t.tally.map((k) => `${k}=${text.split(k).length - 1}`).join(" · ")}`);
+      const key = text.includes(t.marker) ? t.marker : t.fallback;
+      const at = key ? text.indexOf(key) : -1;
+      lines.push(`--- window after ${JSON.stringify(key)} @${at} ---`, at < 0 ? "(none)" : text.slice(at, at + (t.width ?? 800)).replace(/\s+/g, " "));
+    } else if (t.marker) {
       let from = 0;
       for (let i = 0; i < (t.count ?? 1); i++) {
         const at = t.ci ? text.toLowerCase().indexOf(t.marker.toLowerCase(), from) : text.indexOf(t.marker, from);
