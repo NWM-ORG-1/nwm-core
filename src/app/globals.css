@@ -1,0 +1,505 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────────────────
+   NWM design tokens
+   Dark-first: ice-blue signal on deep-space black, hairlines, mono HUD labels.
+   Light reading mode: the periwinkle family tone of New Web Solutions.
+   Market colours follow Korean convention — 상승 red, 하락 blue — and always
+   travel with ▲▼ / +− so colour is never the only cue.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #05060a;
+  --bg-1: #0a0c12;
+  --bg-2: #10131b;
+  --bg-3: #171b26;
+  --line: rgb(158 197 255 / 0.08);
+  --line-2: rgb(158 197 255 / 0.15);
+  --line-3: rgb(158 197 255 / 0.28);
+
+  --fg: #e8eef9;
+  --fg-2: #b3bdd1; /* body copy ≈ 10.5:1 */
+  --fg-3: #7b869c; /* meta ≈ 5:1 */
+  --fg-4: #4f5870; /* decorative only */
+
+  --ice: #9ec5ff;
+  --ice-2: #d6e7ff;
+  --ice-3: #6f93ff;
+  --ice-glow: rgb(158 197 255 / 0.32);
+  --grad-ice: linear-gradient(100deg, #7fa6ff 0%, #b9d6ff 45%, #f4f8ff 100%);
+  --grad-ice-soft: linear-gradient(100deg, #6f93ff 0%, #9ec5ff 60%, #d6e7ff 100%);
+
+  --live: #ff3d8b;
+  --up: #f0616d;
+  --down: #5b8def;
+  --flat: #8a93a8;
+  --good: #3ecf8e;
+  --warn: #ffc24d;
+  --bad: #ff5470;
+
+  --beat-ai: #a8a4f0;
+  --beat-crypto: #e2b36e;
+  --beat-economy: #6fcfa5;
+  --beat-tech: #78c4e6;
+  --beat-sentiment: #e58bb5;
+
+  /* chart categorical slots — validated on the dark surface */
+  --c-1: #5d8cf5;
+  --c-2: #e0652f;
+  --c-3: #1fa877;
+  --c-4: #c060e0;
+
+  --shadow-pop: 0 18px 60px -20px rgb(0 0 0 / 0.7), 0 0 0 1px var(--line-2);
+  --radius: 14px;
+  --header-h: 56px;
+  --ticker-h: 32px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f3f5ff;
+  --bg-1: #ffffff;
+  --bg-2: #eceffc;
+  --bg-3: #e1e6fa;
+  --line: rgb(40 60 140 / 0.1);
+  --line-2: rgb(40 60 140 / 0.17);
+  --line-3: rgb(40 60 140 / 0.3);
+
+  --fg: #121830;
+  --fg-2: #333d5c;
+  --fg-3: #5b6585;
+  --fg-4: #959db6;
+
+  --ice: #3a5fd6;
+  --ice-2: #2443ad;
+  --ice-3: #6f8cf0;
+  --ice-glow: rgb(80 110 230 / 0.25);
+  --grad-ice: linear-gradient(100deg, #2b4fd0 0%, #4a6fe6 50%, #7d97f2 100%);
+  --grad-ice-soft: linear-gradient(100deg, #2b4fd0 0%, #5d7ff0 100%);
+
+  --live: #e0256f;
+  --up: #d62f3d;
+  --down: #2c66d8;
+  --flat: #6b7390;
+  --good: #128a57;
+  --warn: #b77a00;
+  --bad: #d2213f;
+
+  --beat-ai: #5d55d6;
+  --beat-crypto: #a86a10;
+  --beat-economy: #13895a;
+  --beat-tech: #1878a8;
+  --beat-sentiment: #bd3f7c;
+
+  --shadow-pop: 0 18px 50px -24px rgb(30 40 90 / 0.35), 0 0 0 1px var(--line-2);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-bg-3: var(--bg-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-line-3: var(--line-3);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-ice: var(--ice);
+  --color-ice-2: var(--ice-2);
+  --color-ice-3: var(--ice-3);
+  --color-live: var(--live);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-flat: var(--flat);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-beat-ai: var(--beat-ai);
+  --color-beat-crypto: var(--beat-crypto);
+  --color-beat-economy: var(--beat-economy);
+  --color-beat-tech: var(--beat-tech);
+  --color-beat-sentiment: var(--beat-sentiment);
+
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-pixel: var(--font-pixel-face), var(--font-mono-face), ui-monospace, monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ───────────────────────────── base ───────────────────────────── */
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ice) 30%, transparent);
+  color: var(--fg);
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--ice);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ─────────────────────────── utilities ─────────────────────────── */
+
+@utility hud {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Korean section labels (the mono HUD style is for Latin codes and numbers only). */
+@utility kicker {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility text-ice {
+  background: var(--grad-ice);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility glow {
+  text-shadow: 0 0 18px var(--ice-glow);
+}
+
+@utility panel {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 2.5%, transparent), color-mix(in srgb, var(--fg) 0.8%, transparent));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* HUD corner brackets */
+@utility brackets {
+  position: relative;
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    pointer-events: none;
+    border-color: var(--line-3);
+    border-style: solid;
+    transition: border-color 0.2s;
+  }
+  &::before {
+    top: -1px;
+    left: -1px;
+    border-width: 1px 0 0 1px;
+    border-top-left-radius: 4px;
+  }
+  &::after {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 1px 1px 0;
+    border-bottom-right-radius: 4px;
+  }
+}
+
+@utility cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+/* ─────────────────────────── backdrops ─────────────────────────── */
+
+.bg-grid {
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 25%, transparent 75%);
+}
+
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px);
+  border-radius: inherit;
+}
+:root[data-theme="light"] .scanlines::after {
+  display: none;
+}
+
+/* ─────────────────────────── motion ─────────────────────────── */
+
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes orbit-drift {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(6deg);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-marquee {
+  animation: marquee var(--marquee-duration, 80s) linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+.animate-rise {
+  animation: rise 0.45s var(--ease-out-expo) both;
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+.orbit-drift {
+  animation: orbit-drift 40s ease-in-out infinite alternate;
+  transform-origin: 50% 50%;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-2) 0%, var(--bg-3) 50%, var(--bg-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+  border-radius: 8px;
+}
+
+/* Reading progress: pure CSS scroll timeline, no JS. */
+.read-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 60;
+  background: var(--grad-ice-soft);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  animation: grow-x linear both;
+  animation-timeline: scroll(root block);
+  pointer-events: none;
+}
+@supports not (animation-timeline: scroll()) {
+  .read-progress {
+    display: none;
+  }
+}
+
+/* ───────────────────────── view transitions ───────────────────────── */
+
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(site-header),
+::view-transition-group(site-ticker),
+::view-transition-group(reader-dock) {
+  animation: none;
+  z-index: 50;
+}
+@keyframes vt-slide {
+  from {
+    translate: var(--slide-offset) 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+::view-transition-old(.next) {
+  --slide-offset: -48px;
+  animation:
+    140ms ease-in both vt-fade reverse,
+    360ms var(--ease-out-expo) both vt-slide reverse;
+}
+::view-transition-new(.next) {
+  --slide-offset: 48px;
+  animation:
+    220ms ease-out 100ms both vt-fade,
+    420ms var(--ease-out-expo) both vt-slide;
+}
+::view-transition-old(.prev) {
+  --slide-offset: 48px;
+  animation:
+    140ms ease-in both vt-fade reverse,
+    360ms var(--ease-out-expo) both vt-slide reverse;
+}
+::view-transition-new(.prev) {
+  --slide-offset: -48px;
+  animation:
+    220ms ease-out 100ms both vt-fade,
+    420ms var(--ease-out-expo) both vt-slide;
+}
+::view-transition-old(.open) {
+  animation: 120ms ease-in both vt-fade reverse;
+}
+::view-transition-new(.open) {
+  --slide-offset: 0 14px;
+  animation: 260ms ease-out both vt-fade;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .read-progress {
+    display: none;
+  }
+}
+
+/* ───────────────────────── reading ───────────────────────── */
+
+/* Read state set on list rows by the client store. */
+[data-read="true"] .read-dim {
+  opacity: 0.5;
+}
+
+.prose-nwm {
+  font-size: 17px;
+  line-height: 1.78;
+  letter-spacing: -0.005em;
+  color: var(--fg-2);
+}
+.prose-nwm strong {
+  color: var(--fg);
+  font-weight: 650;
+}
+@media (min-width: 768px) {
+  .prose-nwm {
+    font-size: 18px;
+  }
+}
+:root[data-size="lg"] .prose-nwm {
+  font-size: 19px;
+}
+@media (min-width: 768px) {
+  :root[data-size="lg"] .prose-nwm {
+    font-size: 20.5px;
+  }
+}
+:root[data-size="sm"] .prose-nwm {
+  font-size: 16px;
+}
+
+.measure {
+  max-width: 36em;
+}
+
+/* Hide the "JS-only" affordances until hydration. */
+:root:not([data-js]) .js-only {
+  visibility: hidden;
+}
