@@ -27,6 +27,10 @@ const nextConfig: NextConfig = {
 
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
+    // `next dev` only: the dev MCP server appends to .next/dev/logs/next-development.log on
+    // every request, Turbopack takes the write for a change, and open pages reload in a loop
+    // (75–110 reloads per 20 s measured on the newsroom; 2 with this off)
+    mcpServer: false,
   },
 
   turbopack: {
