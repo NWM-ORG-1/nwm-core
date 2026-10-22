@@ -90,7 +90,7 @@ export const exchangeMarketsAdapter = defineAdapter({
         beatGuess: "crypto",
         entities: [l.coin],
         weight,
-        payload: { exchange: c.exchange, market, change: kind, ...extra },
+        payload: { exchange: c.exchange, market, change: kind, coin: l.coin, quote: l.quote, name: (next[market] ?? prev[market])?.n ?? null, ...extra },
       });
     };
 

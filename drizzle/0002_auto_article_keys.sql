@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "candidates_generator_key_uq" ON "candidates" USING btree (("generator"->>'key')) WHERE ("candidates"."generator"->>'key') is not null;

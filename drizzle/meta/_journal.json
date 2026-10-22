@@ -15,6 +15,13 @@
       "when": 1792606162740,
       "tag": "0001_phase2_ingest",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792669794120,
+      "tag": "0002_auto_article_keys",
+      "breakpoints": true
     }
   ]
 }

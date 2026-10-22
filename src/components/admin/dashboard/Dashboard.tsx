@@ -25,7 +25,7 @@ export async function DashboardBody() {
   const [d, clock] = await Promise.all([getDashboard(), getDashboardClock()]);
   const requestIds = d.activity.filter((a) => a.entityType === "correction_request").map((a) => a.entityId);
   const requestArticles = requestIds.length ? await getRequestArticleIds(requestIds) : {};
-  const templates: DataTemplateOption[] = (Object.keys(DATA_TEMPLATES) as DataTemplateId[]).map((id) => ({
+  const templates: DataTemplateOption[] = (Object.keys(DATA_TEMPLATES) as DataTemplateId[]).filter((id) => DATA_TEMPLATES[id].manual).map((id) => ({
     id,
     label: DATA_TEMPLATES[id].label,
     description: DATA_TEMPLATES[id].description,

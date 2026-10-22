@@ -69,10 +69,15 @@ export interface CheckResult {
 }
 
 export interface GeneratorMeta {
-  id: string; // "mock-1", later "claude-…"
+  id: string; // "mock-1", "template:crypto_daily", "claude-…"
   version: string;
   generatedAt: string;
   inputItemIds: string[];
+  /** automatic articles: one candidate per key ever (unique index) — "crypto_daily:20261022" */
+  key?: string;
+  /** model output: model id, tokens and cost of the call that wrote the draft */
+  model?: string;
+  usage?: { inputTokens: number; outputTokens: number; costUsd: number };
 }
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -248,6 +253,7 @@ export const candidates = pgTable(
     index("candidates_status_updated_idx").on(t.status, t.updatedAt.desc()),
     index("candidates_experiment_idx").on(t.experimentId),
     index("candidates_scheduled_idx").on(t.scheduledAt).where(sql`${t.status} = 'scheduled'`),
+    uniqueIndex("candidates_generator_key_uq").on(sql`(${t.generator}->>'key')`).where(sql`(${t.generator}->>'key') is not null`),
   ],
 );
 

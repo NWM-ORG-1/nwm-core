@@ -1,17 +1,19 @@
 "use server";
 
-import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { candidateItems, candidates, feedSources, marketQuotes, sentimentSnapshots, stories, type CheckResult } from "@/db/schema";
+import { candidateItems, candidates, stories, type CheckResult } from "@/db/schema";
 import { draftSchema, EMPTY_DRAFT, type Draft } from "@/lib/content/blocks";
 import { dateKST, dateTimeKST } from "@/lib/format";
 import { ASSIST_ACTION_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { draftHash } from "../checks";
+import { createAutoCandidate } from "../auto/create";
+import { marketInputs, publicSentiment } from "../auto/inputs";
 import { buildDataDraft, DATA_TEMPLATES, type DataTemplateId } from "../generator/data-templates";
 import { getGenerator, type AssistResult } from "../generator";
 import { cdnPurge, invalidateFromAction, refreshInBackground } from "../invalidate";
@@ -28,13 +30,6 @@ import { fail, ok, type ActionState } from "./result";
 
 const beat = z.enum(["ai", "crypto", "economy", "tech", "sentiment"]);
 const id = z.uuid();
-
-/** Feed adapters that supply each data template's tables (for experiment attribution). */
-const TEMPLATE_ADAPTERS: Record<DataTemplateId, string[]> = {
-  crypto_daily: ["market.ws", "market.api", "onchain.api"],
-  market_close: ["market.ws", "market.api"],
-  sentiment_daily: ["market.ws", "community.agg", "social.stream"],
-};
 
 /** checks without the legal sign-off (any draft change invalidates it) */
 const dropLegal = sql`coalesce((select jsonb_agg(x) from jsonb_array_elements(${candidates.checks}) x where x->>'id' <> 'legal'), '[]'::jsonb)`;
@@ -82,42 +77,33 @@ export async function createFromIdea(_prev: ActionState<{ id: string }>, form: F
   }
 }
 
-/** Mode (b): fully automatic data article from a code template. */
+/** Mode (b): a data article from a code template, made now on request (lands in 검토). */
 export async function createDataAuto(input: { template: string }): Promise<ActionState<{ id: string }>> {
   try {
     const me = await requireStaff();
-    const template = z.enum(["crypto_daily", "market_close", "sentiment_daily"]).parse(input.template) as DataTemplateId;
-    const quotes = await db.select().from(marketQuotes);
-    const snaps = await db.select().from(sentimentSnapshots).orderBy(desc(sentimentSnapshots.at));
-    const latest = new Map<string, (typeof snaps)[number]>();
-    for (const s of snaps) if (!latest.has(s.scopeKey)) latest.set(s.scopeKey, s);
-    const draft = buildDataDraft(template, {
-      quotes,
-      sentiment: [...latest.values()],
-      dateLabel: dateKST(new Date()),
-    });
-    if (!draft) throw new NewsroomError("템플릿에 필요한 데이터가 없습니다.", "invalid");
+    const manual = (Object.keys(DATA_TEMPLATES) as DataTemplateId[]).filter((t) => DATA_TEMPLATES[t].manual);
+    const template = z.enum(manual as [DataTemplateId, ...DataTemplateId[]]).parse(input.template);
+    const now = new Date();
+    let draft: Draft | null = null;
+    if (template === "sentiment_daily") {
+      const sentiment = await publicSentiment(db);
+      if (!sentiment) throw new NewsroomError("센티먼트 인덱스를 공개로 전환한 뒤 만들 수 있습니다 (센티먼트 화면).", "invalid");
+      draft = buildDataDraft(template, { quotes: [], sentiment, dateLabel: dateKST(now) });
+    } else {
+      const market = await marketInputs(db, now);
+      draft = buildDataDraft(template, { quotes: market.quotes, sentiment: [], dateLabel: dateKST(now), market });
+    }
+    if (!draft) {
+      throw new NewsroomError(
+        template === "market_close"
+          ? "코스피·코스닥 실시간 시세가 없습니다. 지수 시세 라이선스를 확보한 뒤 쓸 수 있습니다."
+          : "템플릿에 필요한 최근 데이터가 없습니다. 수집 현황에서 시세 소스와 워커를 확인하세요.",
+        "invalid",
+      );
+    }
     const meta = DATA_TEMPLATES[template];
-    // attribute to the experiment of the active feed source that supplies this data
-    const [src] = await db
-      .select({ experimentId: feedSources.experimentId })
-      .from(feedSources)
-      .where(and(inArray(feedSources.adapter, TEMPLATE_ADAPTERS[template]), ne(feedSources.status, "error"), isNotNull(feedSources.experimentId)))
-      .limit(1);
-    const [cand] = await db
-      .insert(candidates)
-      .values({
-        status: "review",
-        mode: "data_auto",
-        beat: meta.beat,
-        priority: 40,
-        experimentId: src?.experimentId ?? null,
-        draft,
-        generator: { id: `template:${template}`, version: "1", generatedAt: new Date().toISOString(), inputItemIds: [] },
-        assigneeId: me.id,
-      })
-      .returning({ id: candidates.id });
-    await logActivity(db, { actorId: me.id, kind: "draft", entityType: "candidate", entityId: cand.id, summary: `데이터 자동 기사 생성: ${meta.label}` });
+    const cand = await createAutoCandidate(db, { template, draft, mode: "review", key: null, now, actorId: me.id, note: "편집자 요청으로 지금 만든 데이터 기사" });
+    if (!cand) throw new NewsroomError("후보를 만들지 못했습니다.", "conflict");
     refresh();
     return ok(`${meta.label} 후보를 만들었습니다.`, { id: cand.id });
   } catch (e) {
