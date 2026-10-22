@@ -21,7 +21,7 @@ const EXAMPLES: Array<{ beat: Beat; idea: string }> = [
 const MIN = 8;
 const MAX = 1000;
 
-export function IdeaForm({ defaultBeat }: { defaultBeat?: Beat }) {
+export function IdeaForm({ defaultBeat, aiLive }: { defaultBeat?: Beat; aiLive: boolean }) {
   const router = useRouter();
   const [state, action] = useActionState<ActionState<{ id: string }>, FormData>(createFromIdea, null);
   const [idea, setIdea] = useState("");
@@ -117,7 +117,7 @@ export function IdeaForm({ defaultBeat }: { defaultBeat?: Beat }) {
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line-2 bg-bg-1 px-3 py-2.5 hover:border-line-3">
             <input type="checkbox" name="draft" value="on" defaultChecked className={cx(f.check, "mt-0.5")} />
             <span>
-              <span className="block text-[13.5px] font-semibold text-fg">AI 초안 바로 생성 (모의)</span>
+              <span className="block text-[13.5px] font-semibold text-fg">AI 초안 바로 생성{aiLive ? "" : " (모의)"}</span>
               <span className="mt-0.5 block text-[12px] leading-relaxed text-fg-3">
                 아이디어를 바탕으로 시그널·왜 중요한가·다음 관전 포인트 뼈대를 채워 ‘작성중’으로 엽니다. 끄면 빈 초안으로 ‘신규’에 둡니다.
               </span>

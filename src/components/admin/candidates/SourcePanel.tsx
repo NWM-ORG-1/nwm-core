@@ -64,6 +64,20 @@ export function SourcePanel({ bundle }: { bundle: CandidateBundle }) {
           <span className="font-mono">
             {c.generator.id}@{c.generator.version}
           </span>
+          {c.generator.model && (
+            <>
+              <span>·</span>
+              <span className="font-mono">{c.generator.model}</span>
+            </>
+          )}
+          {c.generator.usage && (
+            <>
+              <span>·</span>
+              <span className="tabular" title={`입력 ${c.generator.usage.inputTokens.toLocaleString()} · 출력 ${c.generator.usage.outputTokens.toLocaleString()} 토큰`}>
+                ${c.generator.usage.costUsd.toFixed(3)}
+              </span>
+            </>
+          )}
           <span>·</span>
           <span className="tabular">
             {dateKST(c.generator.generatedAt)} {clockKST(c.generator.generatedAt)}

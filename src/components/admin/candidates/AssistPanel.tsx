@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import type { Block, BlockType, Draft } from "@/lib/content/blocks";
 import { plainText } from "@/lib/content/meta";
 import { assistDraft, regenerateDraft } from "@/server/actions/candidates";
-import type { AssistAction, AssistResult } from "@/server/generator/types";
+import type { AiStatus, AssistAction, AssistResult } from "@/server/generator/types";
 import { Badge, btn, cx } from "@/components/admin/ui";
 import { Icon } from "@/components/ui/Icon";
 import { blockTitle } from "./issues";
@@ -12,7 +12,7 @@ import { clockSecKST } from "./shared";
 
 const ACTIONS: Array<{ id: AssistAction; label: string; hint: string }> = [
   { id: "headlines", label: "제목 후보", hint: "45자 안팎 제목 3개" },
-  { id: "tighten", label: "간결하게", hint: "시그널·단락을 첫 문장 중심으로" },
+  { id: "tighten", label: "간결하게", hint: "시그널·단락을 더 짧게" },
   { id: "why", label: "왜 중요한가", hint: "이유 블록 제안" },
   { id: "numbers", label: "숫자로 보면", hint: "원문 수치 추출" },
   { id: "next", label: "다음 관전 포인트", hint: "후속 체크 포인트" },
@@ -27,6 +27,7 @@ interface Suggestion {
 
 export function AssistPanel({
   candidateId,
+  ai,
   draft,
   invalid,
   readOnly,
@@ -39,6 +40,7 @@ export function AssistPanel({
   onUsedAi,
 }: {
   candidateId: string;
+  ai: AiStatus;
   draft: Draft;
   invalid: boolean;
   readOnly: boolean;
@@ -95,9 +97,21 @@ export function AssistPanel({
 
   return (
     <div className="space-y-4">
-      <p className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/[0.05] px-3 py-2 text-[12px] leading-relaxed text-fg-2">
-        <Badge tone="warn">모의</Badge>
-        <span>모의 생성 — 3단계에서 실제 AI로 교체됩니다. 제안은 ‘적용’을 누르기 전까지 초안에 반영되지 않습니다.</span>
+      <p
+        className={cx(
+          "flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] leading-relaxed text-fg-2",
+          ai.live ? "border-ice/30 bg-ice/[0.05]" : "border-warn/30 bg-warn/[0.05]",
+        )}
+      >
+        <Badge tone={ai.live ? "ice" : "warn"}>{ai.live ? "AI" : "모의"}</Badge>
+        <span>
+          {ai.live
+            ? `${ai.assistModel}가 초안과 원천 자료만 보고 제안합니다. 사실과 수치는 원문과 대조하세요.`
+            : ai.kind === "claude"
+              ? "ANTHROPIC_API_KEY가 없어 규칙 기반 모의 제안을 냅니다."
+              : "규칙 기반 모의 제안입니다. DRAFT_GENERATOR=claude로 실제 AI를 켤 수 있습니다."}{" "}
+          제안은 ‘적용’을 누르기 전까지 초안에 반영되지 않습니다.
+        </span>
       </p>
 
       {readOnly ? (

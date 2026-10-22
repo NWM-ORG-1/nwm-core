@@ -82,8 +82,9 @@ async function SourcesBody() {
       <aside className="flex gap-3 rounded-xl border border-line bg-bg-1/50 px-4 py-3 text-[12.5px] leading-relaxed text-fg-3">
         <Icon name="info" size={16} className="mt-0.5 shrink-0 text-fg-2" />
         <p>
-          지금 보이는 소스는 1단계용 <strong className="font-semibold text-fg-2">모의 소스</strong>입니다. 2단계에서 수집 어댑터(DART·KOSIS·EDGAR·RSS 등)가 연결되면 어댑터
-          레지스트리가 이 목록을 자동으로 채우고, 수집 상태와 마지막 오류도 실시간으로 갱신합니다. 직접 추가한 소스는 <span className="font-mono text-fg-2">manual</span> 어댑터로 등록됩니다.
+          기본 소스 목록(<span className="font-mono text-fg-2">src/ingest/catalog</span>)은 수집 워커가 시작할 때 추가됩니다. 이름에 ‘(모의)’가 붙은{" "}
+          <strong className="font-semibold text-fg-2">샘플 소스</strong>는 출시 전 <span className="font-mono text-fg-2">npm run db:purge-samples</span>로 지웁니다. 수집 상태와 마지막
+          오류는 ‘수집 현황’에서 봅니다. 직접 추가한 소스는 <span className="font-mono text-fg-2">manual</span> 어댑터로 등록됩니다.
         </p>
       </aside>
 

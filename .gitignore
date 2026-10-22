@@ -51,3 +51,6 @@ next-env.d.ts
 
 # worker bundle (npm run worker:build)
 /dist
+
+# model comparison reports (npm run compare:drafts)
+/reports/

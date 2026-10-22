@@ -503,6 +503,30 @@ export const ingestRuns = pgTable(
 
 /* ───────────────────────────── ops ───────────────────────────── */
 
+/**
+ * One row per Claude call made for the newsroom (drafts, editor assists, model
+ * comparisons). The monthly budget (DRAFT_LLM_MONTHLY_USD) sums `cost_usd`;
+ * failed calls are kept too, since a refusal or a truncated answer is billed.
+ */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: ts("at").notNull().defaultNow(),
+    purpose: text("purpose").notNull(), // draft | assist:headlines | … | compare
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: doublePrecision("cost_usd").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    ok: boolean("ok").notNull(),
+    error: text("error"),
+  },
+  (t) => [index("ai_usage_at_idx").on(t.at.desc())],
+);
+
 export const activityLog = pgTable(
   "activity_log",
   {

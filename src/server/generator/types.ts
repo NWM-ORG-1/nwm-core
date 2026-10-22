@@ -14,6 +14,7 @@ export interface GenItem {
   entities: string[];
   payload: Record<string, unknown>;
   url: string | null;
+  publishedAt?: Date | null;
 }
 
 export interface GeneratedDraft {
@@ -23,6 +24,16 @@ export interface GeneratedDraft {
 }
 
 export type AssistAction = "headlines" | "tighten" | "why" | "numbers" | "next";
+
+/** What the editor's AI tab says about who writes suggestions. */
+export interface AiStatus {
+  /** Claude is configured and has a key */
+  live: boolean;
+  kind: "mock" | "claude";
+  /** model labels, e.g. "Claude Opus 5.5" */
+  draftModel: string;
+  assistModel: string;
+}
 
 export type AssistResult =
   | { action: "headlines"; titles: string[]; note: string }

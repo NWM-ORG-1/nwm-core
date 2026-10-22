@@ -4,6 +4,7 @@ import { getOpsChecklist, type CheckState } from "@/data/admin-dashboard";
 import { Icon } from "@/components/ui/Icon";
 import { LEGAL_DEFAULTS, LEGAL_FIELDS, PENDING } from "@/lib/site";
 import { cx } from "../ui";
+import { AiPanel } from "./AiPanel";
 import { LegalForm, type LegalFieldView } from "./LegalForm";
 import { ProfileForm } from "./ProfileForm";
 
@@ -63,6 +64,7 @@ export async function SettingsBody() {
     <div className="grid items-start gap-4 px-6 py-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
       <div className="min-w-0 space-y-4">
         <ProfileForm me={me} />
+        <AiPanel />
         <LegalForm fields={fields} />
       </div>
 

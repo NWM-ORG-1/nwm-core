@@ -8,6 +8,7 @@ import { candidateItems, candidates, feedItems } from "@/db/schema";
 import { EMPTY_DRAFT } from "@/lib/content/blocks";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
+import { mapLimit } from "@/lib/ai/limit";
 import { getGenerator } from "../generator";
 import { loadItemsByIds, NewsroomError } from "../newsroom";
 import { fail, ok, type ActionState } from "./result";
@@ -44,13 +45,13 @@ export async function promoteItems(input: {
     let skipped = 0;
     const generator = getGenerator();
     const created: string[] = [];
+    const beatOf = (group: typeof fresh) => p.beat ?? group[0].beatGuess ?? "tech";
 
-    for (const group of groups) {
-      const primary = group[0];
-      const b = p.beat ?? primary.beatGuess ?? "tech";
-      const gen = p.draft
-        ? await generator.draftFromItems({
-            beat: b as never,
+    // a model draft takes seconds: write a few at once rather than one after another
+    const drafts = p.draft
+      ? await mapLimit(groups, 3, (group) =>
+          generator.draftFromItems({
+            beat: beatOf(group) as never,
             mode: p.mode,
             items: group.map((r) => ({
               id: r.id,
@@ -64,9 +65,16 @@ export async function promoteItems(input: {
               entities: r.entities,
               payload: r.payload,
               url: r.url,
+              publishedAt: r.publishedAt,
             })),
-          })
-        : null;
+          }),
+        )
+      : groups.map(() => null);
+
+    for (const [n, group] of groups.entries()) {
+      const primary = group[0];
+      const b = beatOf(group);
+      const gen = drafts[n];
 
       const id = await db.transaction(async (tx) => {
         // Claim the items first: a concurrent promote/dismiss of the same item loses cleanly.

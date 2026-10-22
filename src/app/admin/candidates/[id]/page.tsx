@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getCandidateBundle } from "@/data/admin";
 import { CHECK_META } from "@/server/checks";
+import { aiStatus } from "@/server/generator/config";
 import { CandidateEditor } from "@/components/admin/candidates/CandidateEditor";
 import { SourcePanel } from "@/components/admin/candidates/SourcePanel";
 
@@ -20,7 +21,7 @@ async function Editor({ params }: Pick<PageProps<"/admin/candidates/[id]">, "par
   const { id } = await params;
   const bundle = await getCandidateBundle(id);
   if (!bundle) notFound();
-  return <CandidateEditor key={bundle.candidate.id} bundle={bundle} checkLabels={CHECK_META} sources={<SourcePanel bundle={bundle} />} />;
+  return <CandidateEditor key={bundle.candidate.id} bundle={bundle} checkLabels={CHECK_META} aiStatus={aiStatus()} sources={<SourcePanel bundle={bundle} />} />;
 }
 
 function EditorSkeleton() {

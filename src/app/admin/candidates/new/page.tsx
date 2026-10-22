@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { getAdminShell } from "@/data/admin";
 import { isBeat } from "@/lib/beats";
 import { AI_LABEL, aiLabelLong } from "@/lib/labels";
+import { aiStatus } from "@/server/generator/config";
 import { btn, cx, ModeBadge, PageHeader } from "@/components/admin/ui";
 import { IdeaForm } from "@/components/admin/candidates/IdeaForm";
 import { Icon } from "@/components/ui/Icon";
@@ -40,11 +41,12 @@ export default function NewCandidatePage({ searchParams }: PageProps<"/admin/can
 async function Form({ searchParams }: Pick<PageProps<"/admin/candidates/new">, "searchParams">) {
   const sp = await searchParams;
   const raw = Array.isArray(sp.beat) ? sp.beat[0] : sp.beat;
-  return <IdeaForm defaultBeat={raw && isBeat(raw) ? raw : undefined} />;
+  return <IdeaForm defaultBeat={raw && isBeat(raw) ? raw : undefined} aiLive={aiStatus().live} />;
 }
 
 async function ModeNote() {
   const { me } = await getAdminShell();
+  const ai = aiStatus();
   return (
     <aside className="space-y-3 xl:sticky xl:top-5 xl:self-start" aria-label="모드 C 안내">
       <div className="panel brackets p-5">
@@ -81,7 +83,9 @@ async function ModeNote() {
           </li>
         </ul>
       </div>
-      <p className="px-1 text-[11.5px] leading-relaxed text-fg-4">현재 AI 초안은 모의 생성기입니다 — 3단계에서 실제 AI로 교체됩니다. 생성된 문장은 모두 편집자가 검토해야 합니다.</p>
+      <p className="px-1 text-[11.5px] leading-relaxed text-fg-4">
+        {ai.live ? `AI 초안은 ${ai.draftModel}가 씁니다. 자료 없이 아이디어만 있으면 사실 대신 취재 설계안을 씁니다.` : "현재 AI 초안은 규칙 기반 모의 생성기입니다."} 생성된 문장은 모두 편집자가 검토해야 합니다.
+      </p>
     </aside>
   );
 }

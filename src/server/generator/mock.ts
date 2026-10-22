@@ -92,7 +92,7 @@ function pick<T>(arr: T[], seed: number, n: number): T[] {
   return out;
 }
 
-function sourceKind(kind: string, tier: number): "filing" | "press" | "data" | "social" | "report" | "news" | "paper" {
+export function sourceKind(kind: string, tier: number): "filing" | "press" | "data" | "social" | "report" | "news" | "paper" {
   if (tier >= 3) return "social"; // community / unverified sources are never labelled primary
   if (kind === "api" || kind === "ws") return "data";
   if (kind === "press_pdf" || kind === "rss") return "press";

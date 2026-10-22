@@ -119,6 +119,7 @@ export function toGenItem(r: CandidateItemRow): GenItem {
     entities: r.entities,
     payload: r.payload,
     url: r.url,
+    publishedAt: r.publishedAt,
   };
 }
 
@@ -387,6 +388,7 @@ export async function loadItemsByIds(q: Q, ids: string[]) {
       lang: feedItems.lang,
       entities: feedItems.entities,
       payload: feedItems.payload,
+      publishedAt: feedItems.publishedAt,
       beatGuess: feedItems.beatGuess,
       score: feedItems.score,
       status: feedItems.status,

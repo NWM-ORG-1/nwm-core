@@ -20,6 +20,7 @@
     "db:studio": "drizzle-kit studio",
     "sources:sync": "tsx --env-file-if-exists=.env.local scripts/sources-sync.ts",
     "probe:adapters": "tsx scripts/probe/adapters.ts",
+    "compare:drafts": "tsx --env-file-if-exists=.env.local scripts/compare-drafts.ts",
     "hash-password": "tsx scripts/hash-password.ts",
     "audit:build": "node scripts/audit-build.mjs",
     "test:e2e": "playwright test",

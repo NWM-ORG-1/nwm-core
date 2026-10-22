@@ -79,6 +79,23 @@ function copiesRun(text: string, src: string, n: number) {
 
 const NUM_TOKEN = /\d[\d,]*(?:\.\d+)?/g;
 
+/**
+ * Numbers in the draft (text and key-number deltas) that appear nowhere in the
+ * source items — titles, summaries or payload values. Chart series are data and
+ * are checked by eye.
+ */
+export function numbersNotInSources(draft: Draft, items: Array<Pick<CheckItem, "title" | "summary" | "payload">>): string[] {
+  const haystack = items
+    .map((i) => [i.title, i.summary, ...payloadLeaves(i.payload)].join(" "))
+    .join(" ")
+    .replace(/(\d),(?=\d)/g, "$1");
+  const text = plainText(draft.title, draft.dek, draft.blocks);
+  const checked = [text, ...draft.blocks.flatMap((b) => (b.type === "numbers" ? b.items.map((n) => n.delta ?? "") : []))].join(" ");
+  const nums = [...new Set((checked.match(NUM_TOKEN) ?? []).map((n) => n.replace(/,/g, "")))];
+  const has = (n: string) => new RegExp(`(?<![\\d.])${n.replace(/\./g, "\\.")}(?!\\d)`).test(haystack);
+  return nums.filter((n) => !has(n));
+}
+
 export function runChecks(input: {
   draft: Draft;
   mode: CandidateMode;
@@ -156,15 +173,7 @@ export function runChecks(input: {
   if (mode === "data_auto") {
     push("numbers", true, "데이터 템플릿 — 수치는 원천 데이터에서 자동 입력");
   } else {
-    const haystack = items
-      .map((i) => [i.title, i.summary, ...payloadLeaves(i.payload)].join(" "))
-      .join(" ")
-      .replace(/(\d),(?=\d)/g, "$1");
-    // also check KeyNumber deltas, which plainText() leaves out (chart series are data, checked by eye)
-    const checked = [text, ...draft.blocks.flatMap((b) => (b.type === "numbers" ? b.items.map((n) => n.delta ?? "") : []))].join(" ");
-    const nums = [...new Set((checked.match(NUM_TOKEN) ?? []).map((n) => n.replace(/,/g, "")))];
-    const has = (n: string) => new RegExp(`(?<![\\d.])${n.replace(/\./g, "\\.")}(?!\\d)`).test(haystack);
-    const unmatched = nums.filter((n) => !has(n));
+    const unmatched = numbersNotInSources(draft, items);
     push(
       "numbers",
       unmatched.length === 0,

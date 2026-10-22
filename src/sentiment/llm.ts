@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { hasAnthropicKey, quickParams, usageCostUsd } from "@/lib/ai/models";
+import { outputFormat } from "@/lib/ai/schema";
 
 /**
  * Batch stance labelling with Claude (default Claude Haiku 5.5): ~50 short posts
@@ -10,13 +11,6 @@ import { z } from "zod";
  */
 
 export const DEFAULT_MODEL = "claude-haiku-5-5";
-
-/** USD per million tokens: [input, output]. Cache writes ×1.25, reads ×0.1 of input. */
-const PRICES: Record<string, [number, number]> = {
-  "claude-haiku-5-5": [0.1, 0.5],
-  "claude-sonnet-5-5": [2, 10],
-  "claude-opus-5-5": [4, 20],
-};
 
 export function sentimentModel(): string {
   return process.env.SENTIMENT_MODEL?.trim() || DEFAULT_MODEL;
@@ -97,24 +91,23 @@ function getClient(): Anthropic {
 }
 
 export function llmAvailable(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return hasAnthropicKey();
 }
 
 export async function labelBatch(posts: Array<{ i: number; t: string }>, model = sentimentModel()): Promise<LlmBatchResult | null> {
+  // a short classification: low effort, and no thinking where the model allows turning it off
+  const { thinking, output_config } = quickParams(model);
   const res = await getClient().messages.parse({
     model,
     max_tokens: 4096,
     system: [{ type: "text", text: RUBRIC, cache_control: { type: "ephemeral" } }],
-    // a short classification: no thinking, low effort (allowed at ≤ high on Haiku 5.5)
-    thinking: { type: "disabled" },
-    output_config: { effort: "low", format: zodOutputFormat(Output) },
+    ...(thinking ? { thinking } : {}),
+    output_config: { ...output_config, format: outputFormat(Output) },
     messages: [{ role: "user", content: JSON.stringify(posts) }],
   });
 
   const u = res.usage;
-  const [pin, pout] = PRICES[model] ?? PRICES[DEFAULT_MODEL];
-  const costUsd =
-    ((u.input_tokens ?? 0) * pin + (u.cache_creation_input_tokens ?? 0) * pin * 1.25 + (u.cache_read_input_tokens ?? 0) * pin * 0.1 + (u.output_tokens ?? 0) * pout) / 1e6;
+  const costUsd = usageCostUsd(model, u);
 
   if (res.stop_reason === "refusal" || !res.parsed_output) return null;
   const known = new Set(Object.keys(KNOWN_ASSETS));

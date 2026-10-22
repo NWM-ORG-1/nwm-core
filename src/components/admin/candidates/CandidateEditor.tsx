@@ -10,6 +10,7 @@ import { CANDIDATE_MODE_LABEL } from "@/lib/labels";
 import { clockKST, dateKST } from "@/lib/format";
 import { assignCandidate, createStory, publishNow, rejectCandidate, runCandidateChecks, saveDraft } from "@/server/actions/candidates";
 import { peekCandidate } from "@/server/actions/candidates-extra";
+import type { AiStatus } from "@/server/generator/types";
 import { btn, cx, ExperimentDot, ModeBadge, StatusBadge } from "@/components/admin/ui";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
@@ -74,7 +75,7 @@ const sentenceCount = (t: string) => t.split(SENTENCES).filter((s) => s.trim()).
 
 /* ───────────────────────────── editor ───────────────────────────── */
 
-export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: CandidateBundle; checkLabels: CheckLabels; sources: ReactNode }) {
+export function CandidateEditor({ bundle, checkLabels, aiStatus, sources }: { bundle: CandidateBundle; checkLabels: CheckLabels; aiStatus: AiStatus; sources: ReactNode }) {
   const c = bundle.candidate;
   const id = c.id;
   const uid = useId();
@@ -680,6 +681,7 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
               idBase={uid}
               tab={tab}
               onTab={(t) => setTab(t)}
+              aiStatus={aiStatus}
               badges={{
                 checks: sum.ran
                   ? sum.failing.length
@@ -694,6 +696,7 @@ export function CandidateEditor({ bundle, checkLabels, sources }: { bundle: Cand
             <Panel idBase={uid} id="assist" tab={tab}>
               <AssistPanel
                 candidateId={id}
+                ai={aiStatus}
                 draft={validation.success ? validation.data : draft}
                 invalid={invalid}
                 readOnly={readOnly}
@@ -872,11 +875,13 @@ function Tabs({
   tab,
   onTab,
   badges,
+  aiStatus,
 }: {
   idBase: string;
   tab: Tab;
   onTab: (t: Tab) => void;
   badges: Partial<Record<Tab, { text: string; tone: "good" | "warn" | "bad"; label: string }>>;
+  aiStatus: AiStatus;
 }) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
   const onKey = (e: React.KeyboardEvent, i: number) => {
@@ -915,8 +920,8 @@ function Tabs({
             )}
           >
             {t.label}
-            {t.id === "assist" && (
-              <span className="rounded border border-warn/40 px-1 text-[10px] font-semibold leading-[14px] text-warn" title="모의 생성 — 3단계에서 실제 AI로 교체">
+            {t.id === "assist" && !aiStatus.live && (
+              <span className="rounded border border-warn/40 px-1 text-[10px] font-semibold leading-[14px] text-warn" title={aiStatus.kind === "claude" ? "API 키가 없어 모의 생성" : "규칙 기반 모의 생성"}>
                 모의
               </span>
             )}

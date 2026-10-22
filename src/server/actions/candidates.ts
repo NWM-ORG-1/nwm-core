@@ -224,7 +224,7 @@ export async function rejectCandidate(input: { id: string; reason: string }): Pr
   }
 }
 
-/* ───────────────────────── AI (mock in phase 1) ───────────────────────── */
+/* ───────────────────────── AI (mock or Claude, see generator/config) ───────────────────────── */
 
 /** Re-generate the whole draft from the linked items (replaces the draft). */
 export async function regenerateDraft(input: { id: string }): Promise<ActionState<{ draft: Draft; lockVersion: number }>> {
@@ -250,7 +250,8 @@ export async function regenerateDraft(input: { id: string }): Promise<ActionStat
       })
       .where(and(eq(candidates.id, c.id), ne(candidates.status, "published")))
       .returning({ lockVersion: candidates.lockVersion });
-    await logActivity(db, { actorId: me.id, kind: "draft", entityType: "candidate", entityId: c.id, summary: `초안 생성 (${gen.meta.id})` });
+    const how = gen.meta.model ? `${gen.meta.model}${gen.meta.usage ? `, $${gen.meta.usage.costUsd.toFixed(3)}` : ""}` : gen.meta.id;
+    await logActivity(db, { actorId: me.id, kind: "draft", entityType: "candidate", entityId: c.id, summary: `초안 생성 (${how})`, meta: { generator: gen.meta.id, model: gen.meta.model, usage: gen.meta.usage } });
     refresh();
     return ok("초안을 생성했습니다.", { draft: gen.draft, lockVersion: u.lockVersion });
   } catch (e) {

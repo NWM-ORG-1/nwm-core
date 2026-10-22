@@ -64,9 +64,10 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
 | `/admin/sentiment` | 센티먼트: 그림자 지수와 공포·탐욕 지수 비교, 구성 요소, 분류 결과·비용, 사이트 공개 전환 |
 | `/admin/sources`, `/admin/experiments` | 소스(어댑터 설정 검사·예시, 필요한 키, 저장 전 미리 실행, 라이선스 기록·신뢰 등급), 가설 관리 |
 | `/admin/candidates` | 칸반 (신규 → 작성중 → 검토 → 예약) |
-| `/admin/candidates/[id]` | 구조화 편집기: 블록 편집, 자동저장, AI 어시스트(모의), 체크리스트, 미리보기, 발행·예약 |
+| `/admin/candidates/[id]` | 구조화 편집기: 블록 편집, 자동저장, AI 어시스트(Claude, 키가 없으면 모의), 체크리스트, 미리보기, 발행·예약 |
+| `/admin/auto` | 자동 기사: 유형별 끄기 / 검토 후 발행 / 자동 발행, 발행 시각·급변동 기준, 최근 7일 생성·발행 기록, 막힘 경고 |
 | `/admin/articles` | 발행 기사: 지표, 수정·정정(버전), 정정 요청, 비공개 |
-| `/admin/stories`, `/admin/activity`, `/admin/settings` | 스토리, 감사 로그, 법정 표기 |
+| `/admin/stories`, `/admin/activity`, `/admin/settings` | 스토리, 감사 로그, 설정 (법정 표기, AI 초안 모델·이번 달 비용) |
 
 ## 아키텍처 요약
 
@@ -98,13 +99,24 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
   - 게시물은 Claude API로 분류합니다(`SENTIMENT_MODEL`). 키·월 예산·동의가 없으면 사전(lexicon)으로 분류합니다.
   - 커뮤니티·소셜 40% + 시장 지표 45% + 관심도 15%를 robust z-score로 합쳐 −100…100으로 냅니다.
   - 새 값은 ‘그림자’로만 쌓입니다. 뉴스룸에서 공개로 바꿔야 사이트에 나갑니다.
+- **자동 기사** (`src/server/auto`, 워커 작업 `auto.articles`, 1분마다)
+  - 유형: 크립토 데일리(매일 08:30), 센티먼트 데일리(매일 21:00, 기본 꺼짐), 급변동 속보(비트코인·이더리움 1시간 ±3% 이상), 업비트·빗썸의 신규 거래지원·거래지원 종료·유의 종목 지정·해제.
+  - 유형마다 `/admin/auto`에서 **끄기 / 검토 후 발행 / 자동 발행**을 고릅니다. 기본은 ‘검토 후 발행’이라 후보 보드 ‘검토’에 쌓입니다.
+  - 자동 발행이면 예약 발행 스케줄러가 1분 안에 ‘NWM 데이터 데스크’ 이름으로 내고, ‘자동 생성 · 데이터 기반’으로 표기합니다. 필수 체크(출처 라이선스 등)에 걸리면 발행하지 않고 사유와 함께 ‘검토’로 돌려보냅니다.
+  - 수치는 코드 템플릿이 실제 시세·지표에서 채웁니다(LLM 없음). 샘플·오래된 값은 쓰지 않고, 같은 사건은 키로 한 번만 만듭니다. 유형별 기사는 시리즈 스토리로 묶입니다.
+- **AI 초안** (`src/server/generator`, `DRAFT_GENERATOR=claude`)
+  - 피드 승격·아이디어·‘초안 다시 생성’ 때 Claude가 인박스 자료로 브리프를 씁니다. 모델은 `DRAFT_MODEL`(기본 `claude-opus-5-5`)로 정하고, `npm run compare:drafts`로 비교해 고릅니다.
+  - 모델에는 신호 전용 소스(다른 언론사 기사)를 보내지 않습니다. 출처 목록은 모델이 아니라 코드가 실제로 쓴 자료에서 만들고, 원문에 없는 수치는 AI 메모에 따로 적습니다.
+  - 키가 없거나, 이번 달 한도(`DRAFT_LLM_MONTHLY_USD`, 기본 50달러)를 넘었거나, 호출이 실패하면 규칙 기반 모의 초안으로 대신하고 AI 메모에 사유를 남깁니다. 뉴스룸이 모델 때문에 멈추지 않습니다.
+  - 편집기의 어시스트(제목 후보·간결하게·왜 중요한가·숫자·관전 포인트)는 짧은 호출(effort low)로 같은 원칙을 따르고, ‘적용’을 눌러야 반영됩니다.
+  - 호출마다 토큰·비용·실패 사유를 `ai_usage`에 남기고, `/admin/settings`에서 이번 달 사용액을 봅니다.
 - **데이터**: Postgres + Drizzle (`src/db/schema.ts`). 테이블은 다음과 같습니다.
   - `articles`: 블록 JSON, `ai_involvement`, 편집자
   - `article_revisions`, `article_corrections`, `correction_requests`
   - `stories`, `candidates`, `candidate_items`
   - `feed_sources`(라이선스 필드), `feed_items`, `experiments`
   - `market_quotes`, `market_metrics`, `social_posts`, `sentiment_snapshots`, `ingest_runs`
-  - `article_stats_daily`, `activity_log`, `site_settings`
+  - `article_stats_daily`, `activity_log`, `site_settings`, `ai_usage`
 - **신뢰 장치**
   - 모든 기사에 AI 표기를 붙입니다. 화면 배지, 메타 태그, JSON-LD IPTC `digitalSourceType`.
   - AI 초안·보조 기사는 **책임 편집자가 없으면 DB가 거부**합니다 (CHECK 제약).
@@ -139,6 +151,10 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0`. 이미 쓰고 있는 DB(실제 기사·계정·가설이 있거나 샘플을 지운 적이 있음)에는 다시 넣지 않습니다. |
    | `LEGAL_*` (선택) | 법정 표기. 빌드 때 페이지에 들어가므로 **다음 배포부터** 반영됩니다. 바로 반영하려면 `/admin/settings`에서 입력합니다. |
    | `TRUSTED_PROXY_HOPS` | 기본 `1` (Railway 엣지). 앞에 CDN을 두면 `2` |
+   | `DRAFT_GENERATOR` | `claude`면 AI 초안·어시스트에 Claude를 씁니다. 기본 `mock` |
+   | `ANTHROPIC_API_KEY` | AI 초안용. 워커와 같은 키라면 Shared Variable로 두고 `${{shared.ANTHROPIC_API_KEY}}`로 참조합니다 |
+   | `DRAFT_MODEL` · `DRAFT_ASSIST_MODEL` · `DRAFT_EFFORT` (선택) | 초안 모델(기본 `claude-opus-5-5`), 어시스트 모델(기본: 초안 모델), effort(기본: 모델 기본값) |
+   | `DRAFT_LLM_MONTHLY_USD` | 초안·어시스트 합산 월 한도, 달러 (기본 50) |
 
 5. 빌드 순서 (Dockerfile): `db:migrate`(advisory lock) → (선택) `db:seed --if-empty` → `next build`.
    - 빌드가 DB에서 데이터를 읽어 페이지를 미리 만듭니다.
@@ -196,8 +212,9 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
 | `npm run worker` | 수집 워커 (개발용, `.env.local` 사용) |
 | `npm run worker:build` | 워커 번들 `dist/worker.cjs` (워커 이미지에서 사용) |
 | `npm run sources:sync [-- --update \| --dry]` | 기본 소스 목록을 DB에 반영. `--update`는 목록에서 온 소스의 기술 설정을 다시 맞춤, `--dry`는 미리 보기 |
-| `npm run test:unit` | 수집기·센티먼트 단위 테스트(실제 응답 캡처 사용) + DB 통합 테스트(`DATABASE_URL` 없으면 건너뜀) |
+| `npm run test:unit` | 수집기·센티먼트·자동 기사·AI 초안(가짜 클라이언트) 단위 테스트 + DB 통합 테스트(`DATABASE_URL` 없으면 건너뜀) |
 | `npm run probe:adapters [-- slug…]` | 기본 소스를 실제 엔드포인트에 한 번씩 실행해 파싱 결과 출력 (DB 사용 안 함) |
+| `npm run compare:drafts [-- --run --items 5 --models a,b@effort --candidates id,…]` | 같은 인박스 자료로 모델별 초안을 써서 시간·토큰·비용·체크 결과를 비교 (`reports/`에 보고서). `--run` 없이 실행하면 대상과 예상 비용만 보여 주고, `--run`에는 `ANTHROPIC_API_KEY`가 필요합니다. 운영 DB의 자료로 비교하려면 웹 서비스에 연결한 상태에서 `railway run -- sh -c 'DATABASE_URL="$DATABASE_PUBLIC_URL" npm run compare:drafts -- --run'` |
 | `npm run audit:build` | 공개 라우트가 모두 정적인지 빌드 결과를 검사 |
 | `npm run test:e2e` | Playwright (공개·읽기 흐름·회귀·성능 예산). 프로덕션 서버에 `ADMIN_USERS`가 없으면 뉴스룸 흐름은 건너뜁니다 |
 | `E2E_BASE_URL=http://localhost:3000 npx playwright test e2e/newsroom.spec.ts` | 뉴스룸 흐름 (승격 → 편집 → 발행 → 독자 화면 즉시 반영 → 정정 → 비공개). `npm run dev` 상태에서 실행하며, 만든 데이터는 끝나면 지웁니다 |
@@ -223,8 +240,9 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
   - 바이비트·바이낸스 선물은 미국 러너에서 지역 차단됩니다. Railway에 올린 뒤 `/admin/ingest`에서 수집되는지 확인합니다.
   - 센티먼트는 2주 이상 그림자로 운영하고, `/admin/sentiment`에서 공포·탐욕 지수와 비교한 뒤 공개합니다.
   - 인박스 항목의 라이선스 필드를 먼저 검토해야 발행 체크를 통과합니다.
-- **AI 연동 (3단계)**
-  - `src/server/generator`에 Claude 구현을 추가하고 `DRAFT_GENERATOR=claude`로 전환합니다.
+- **AI 연동 (3단계) 남은 일**
+  - Anthropic 키를 받으면 `npm run compare:drafts -- --run`으로 모델을 비교하고, `DRAFT_MODEL`을 정한 뒤 웹 서비스에 `DRAFT_GENERATOR=claude`를 켭니다.
+  - 자동 기사는 처음엔 ‘검토 후 발행’으로 두고, 유형별로 결과가 안정되면 ‘자동 발행’으로 바꿉니다. 자동 발행 유형의 출처(거래소 마켓 소스 등)는 라이선스 검토를 먼저 마쳐야 합니다.
   - 데이터 자동 기사의 수치는 계속 코드 템플릿으로 채웁니다.
 - **영문 Pro (보류)**
   - 스키마의 `edition` 컬럼(ko/en)이 확장 지점입니다.
