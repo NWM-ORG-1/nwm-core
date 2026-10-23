@@ -12,8 +12,8 @@ export function Header() {
       style={{ viewTransitionName: "site-header" }}
     >
       <div className="mx-auto flex h-[var(--header-h)] max-w-[1320px] items-center gap-3 px-4 sm:px-6">
-        <Link href="/" aria-label="NWM 뉴웹미디어 홈" className="shrink-0 rounded-md">
-          <Wordmark withName />
+        <Link href="/" aria-label="뉴웹미디어 홈" className="shrink-0 rounded-md">
+          <Wordmark />
         </Link>
         <div className="mx-2 hidden h-5 w-px bg-line-2 md:block" aria-hidden="true" />
         <div className="hidden min-w-0 flex-1 md:block">

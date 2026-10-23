@@ -72,9 +72,9 @@ export function ArticlePreview({ a, device = "responsive" }: { a: PreviewArticle
           {a.title.trim() || "제목을 입력하세요"}
         </h1>
         <div className="mt-5 border-l-2 border-ice/60 pl-4">
-          <p className="kicker mb-1.5 text-ice">시그널</p>
+          <p className="kicker mb-1.5 text-ice">요약</p>
           <p className={cx("font-medium leading-relaxed", d ? "text-[19.5px]" : m ? "text-[18px]" : "text-[18px] sm:text-[19.5px]", a.dek.trim() ? "text-fg-2" : "text-fg-4")}>
-            {a.dek.trim() || "시그널(1–2문장 요약)을 입력하세요"}
+            {a.dek.trim() || "요약(1–2문장)을 입력하세요"}
           </p>
         </div>
         <div className="mt-6 space-y-2.5 border-b border-line pb-5 text-[12.5px] text-fg-3">

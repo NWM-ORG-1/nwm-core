@@ -55,7 +55,7 @@ export function SentimentBlock({ s, title = "투자자 심리" }: { s: Sentiment
           ))}
         </p>
       )}
-      <p className="mt-3 text-[11px] text-fg-4">커뮤니티·소셜 언급을 집계한 지표입니다. 개별 게시물은 인용하지 않습니다.</p>
+      <p className="mt-3 text-[11px] text-fg-4">커뮤니티와 SNS 언급을 집계한 지표입니다. 개별 게시물은 인용하지 않습니다.</p>
     </section>
   );
 }

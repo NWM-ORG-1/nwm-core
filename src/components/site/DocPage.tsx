@@ -11,7 +11,7 @@ export function DocPage({ kicker, title, lead, children, updated }: { kicker: st
       {updated && <p className="mt-12 border-t border-line pt-4 text-[12.5px] text-fg-4">시행·개정: {updated}</p>}
       <nav className="mt-8 flex flex-wrap gap-2 text-[13px]" aria-label="정책 문서">
         {[
-          ["/about", "NWM 소개"],
+          ["/about", "회사 소개"],
           ["/policy/ai", "AI 활용 원칙"],
           ["/policy/corrections", "정정·반론"],
           ["/policy/youth", "청소년보호정책"],

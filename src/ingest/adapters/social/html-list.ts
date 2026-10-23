@@ -69,7 +69,7 @@ type Cfg = z.infer<typeof config>;
 export const htmlListAdapter = defineAdapter({
   key: "html.list",
   label: "게시판 목록 (HTML)",
-  description: "API·RSS가 없는 게시판의 목록 페이지를 CSS 선택자로 읽습니다. 커뮤니티 글은 센티먼트(제목·조회·댓글 수)로, 기관 게시판은 인박스로. 본문은 읽지 않고 robots.txt를 지킵니다(협의 시에만 예외 기록).",
+  description: "API·RSS가 없는 게시판의 목록 페이지를 CSS 선택자로 읽습니다. 커뮤니티 글은 투자심리 집계(제목·조회·댓글 수)로, 기관 게시판은 인박스로. 본문은 읽지 않고 robots.txt를 지킵니다(협의 시에만 예외 기록).",
   kind: "scrape",
   group: "social",
   configSchema: config,

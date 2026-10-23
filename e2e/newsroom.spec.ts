@@ -25,7 +25,7 @@ const SLOW = { timeout: 20_000 };
 const stamp = Date.now();
 const run = {
   title: `E2E 검증 기사 ${stamp}`,
-  note: `E2E 검증 정정 ${stamp}: 시그널 문구를 바로잡았습니다.`,
+  note: `E2E 검증 정정 ${stamp}: 요약 문구를 바로잡았습니다.`,
   startedAt: null as Date | null,
   items: [] as Array<{ id: string; title: string }>,
   profileSaved: false,
@@ -236,9 +236,9 @@ test.describe.serial("newsroom", () => {
 
     await page.goto(`/admin/articles/${run.articleId}`);
     const form = page.locator("#revise");
-    const dek = await hydrated(form.getByLabel(/시그널/));
+    const dek = await hydrated(form.getByLabel(/요약/));
     await dek.fill(`${(await dek.inputValue()).trim()} (정정)`);
-    await form.getByLabel(/수정 사유/).fill("E2E 검증 — 시그널 정정");
+    await form.getByLabel(/수정 사유/).fill("E2E 검증 — 요약 정정");
     await form.getByLabel(/정정 종류/).selectOption("correction");
     await form.getByLabel(/공개 정정문/).fill(run.note);
     await form.getByRole("button", { name: /정정 게시/ }).click();
@@ -261,7 +261,7 @@ test.describe.serial("newsroom", () => {
 
     const { context, page: pub } = await reader(browser);
     const res = await pub.goto(`/a/${run.slug}`);
-    await expect(pub.getByText("신호를 찾지 못했습니다")).toBeVisible();
+    await expect(pub.getByText("페이지를 찾을 수 없습니다")).toBeVisible();
     await expect(pub.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached();
     // `next dev` streams the page, so its status is already 200 when notFound() runs; production answers 404.
     const dev = (await pub.locator("nextjs-portal").count()) > 0;

@@ -74,7 +74,7 @@ export async function getAutoAdmin(): Promise<{ rows: AutoTemplateRow[]; schedul
       if ((id === "crypto_daily" || id === "crypto_move") && !btcFresh) {
         warnings.push({ text: "최근 15분 안에 들어온 비트코인 시세가 없습니다. 바이낸스 소스와 워커를 확인하세요.", href: "/admin/ingest" });
       }
-      if (id === "sentiment_daily" && !sentiment) warnings.push({ text: "센티먼트 인덱스를 공개한 뒤부터 만들어집니다.", href: "/admin/sentiment" });
+      if (id === "sentiment_daily" && !sentiment) warnings.push({ text: "투자심리지수를 공개한 뒤부터 만들어집니다.", href: "/admin/sentiment" });
       if (id.startsWith("exchange_")) {
         if (!activeExchange.length) warnings.push({ text: "업비트·빗썸 마켓 목록 소스가 꺼져 있습니다.", href: "/admin/sources" });
         if (setting.mode === "auto") {

@@ -119,7 +119,7 @@ export function IdeaForm({ defaultBeat, aiLive }: { defaultBeat?: Beat; aiLive: 
             <span>
               <span className="block text-[13.5px] font-semibold text-fg">AI 초안 바로 생성{aiLive ? "" : " (모의)"}</span>
               <span className="mt-0.5 block text-[12px] leading-relaxed text-fg-3">
-                아이디어를 바탕으로 시그널·왜 중요한가·다음 관전 포인트 뼈대를 채워 ‘작성중’으로 엽니다. 끄면 빈 초안으로 ‘신규’에 둡니다.
+                아이디어를 바탕으로 요약·왜 중요한가·다음 관전 포인트 뼈대를 채워 ‘작성중’으로 엽니다. 끄면 빈 초안으로 ‘신규’에 둡니다.
               </span>
             </span>
           </label>

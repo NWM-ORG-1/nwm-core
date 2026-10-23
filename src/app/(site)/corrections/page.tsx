@@ -5,7 +5,7 @@ import { QueueScope } from "@/components/feed/QueueScope";
 import { BEATS } from "@/lib/beats";
 import { dateTimeKST } from "@/lib/format";
 
-export const metadata: Metadata = { title: "정정 기록", description: "NWM이 발행 후 바로잡은 모든 기록." };
+export const metadata: Metadata = { title: "정정 기록", description: "뉴웹미디어가 발행 뒤 바로잡은 기사 목록입니다." };
 
 const KIND: Record<string, string> = { correction: "정정", clarification: "바로잡음", update: "업데이트" };
 
@@ -19,7 +19,7 @@ export default async function CorrectionsPage() {
       <p className="hud text-ice">TRANSPARENCY</p>
       <h1 className="mt-3 text-[34px] font-extrabold tracking-[-0.035em] text-fg">정정 기록</h1>
       <p className="mt-3 text-[15.5px] leading-relaxed text-fg-2">
-        틀린 것은 고치고, 고친 사실은 숨기지 않습니다. 기사 본문을 바로잡은 뒤 무엇을 왜 고쳤는지 이곳과 해당 기사 하단에 함께 남깁니다.{" "}
+        잘못된 내용은 기사 본문에서 바로잡고, 무엇을 왜 고쳤는지 이 페이지와 해당 기사 아래에 함께 남깁니다.{" "}
         <Link href="/policy/corrections" className="text-ice hover:underline">
           정정·반론 신청 →
         </Link>

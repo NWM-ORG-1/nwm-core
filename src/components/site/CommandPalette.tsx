@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchRecord } from "@/data/dto";
 import type { Beat } from "@/db/schema";
-import { BEATS, BEAT_ORDER } from "@/lib/beats";
+import { BEATS, NAV_BEATS } from "@/lib/beats";
 import { setQueue } from "@/lib/client/reading";
 import { readPrefs, writePrefs } from "@/lib/prefs";
 import { searchIndex } from "@/lib/search";
@@ -79,12 +79,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       router.push(href);
     };
     const commands: Row[] = [
-      ...BEAT_ORDER.map((b) => ({ kind: "command" as const, id: `beat-${b}`, label: `${BEATS[b].label} 섹션`, hint: BEATS[b].path, run: go(BEATS[b].path) })),
+      ...NAV_BEATS.map((b) => ({ kind: "command" as const, id: `beat-${b}`, label: `${BEATS[b].label} 섹션`, hint: BEATS[b].path, run: go(BEATS[b].path) })),
       { kind: "command", id: "latest", label: "최신 기사 전체", hint: "/latest", run: go("/latest") },
       {
         kind: "command",
         id: "theme",
-        label: "다크 ↔ 라이트 읽기 전환",
+        label: "밝은 화면 / 어두운 화면 전환",
         hint: "화면",
         run: () => {
           const p = readPrefs();

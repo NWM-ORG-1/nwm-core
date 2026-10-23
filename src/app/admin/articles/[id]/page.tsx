@@ -275,7 +275,7 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
                   버전 이력 <span className="tabular font-mono text-[12px] font-normal text-fg-3">{revisions.length}</span>
                 </>
               }
-              lead="모든 수정은 버전으로 보존됩니다. 두 버전을 골라 제목·시그널·본문을 나란히 비교할 수 있습니다."
+              lead="모든 수정은 버전으로 보존됩니다. 두 버전을 골라 제목·요약·본문을 나란히 비교할 수 있습니다."
             >
               <RevisionHistory
                 current={a.revision}

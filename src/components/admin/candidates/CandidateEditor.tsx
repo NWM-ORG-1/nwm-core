@@ -621,7 +621,7 @@ export function CandidateEditor({ bundle, checkLabels, aiStatus, sources }: { bu
             <div>
               <label htmlFor={`${uid}-dek`} className={f.label}>
                 <span>
-                  시그널 <span className="font-normal text-fg-4">· 1–2문장</span>
+                  요약 <span className="font-normal text-fg-4">· 1–2문장</span>
                 </span>
                 <span className={cx("tabular font-mono text-[10.5px] font-normal", dekLen > 300 ? "text-bad" : dekLen > 120 || dekSentences > 2 ? "text-warn" : "text-fg-4")}>
                   {dekSentences}문장 · {dekLen}/120
@@ -637,7 +637,7 @@ export function CandidateEditor({ bundle, checkLabels, aiStatus, sources }: { bu
                 placeholder="무슨 일이 있었고 왜 중요한지, 1–2문장으로"
                 className={cx(f.textarea, "text-[15px] leading-[1.7]")}
               />
-              {dekIssue ? <p className={f.error}>{dekIssue.message}</p> : <p className={f.help}>기사 맨 위 ‘시그널’ 박스로 나갑니다. 120자 이내, 2문장 이하를 권장합니다.</p>}
+              {dekIssue ? <p className={f.error}>{dekIssue.message}</p> : <p className={f.help}>기사 맨 위 ‘요약’ 박스로 나갑니다. 120자 이내, 2문장 이하를 권장합니다.</p>}
             </div>
 
             <section aria-labelledby={`${uid}-blocks`}>

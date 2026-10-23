@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ArticleCard, StoryDTO } from "@/data/dto";
 import type { Beat } from "@/db/schema";
-import { BEATS, BEAT_ORDER } from "@/lib/beats";
+import { BEATS, NAV_BEATS } from "@/lib/beats";
 import { compactKo } from "@/lib/format";
 import { beatDotClass, beatTextClass } from "@/components/ui/BeatChip";
 import { IntentLink } from "@/components/feed/IntentLink";
@@ -20,12 +20,15 @@ export function SectionHead({ title, href, more = "더 보기" }: { title: strin
   );
 }
 
+/** One desktop column per beat on offer. */
+const RAIL_COLS = NAV_BEATS.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-5";
+
 /** Per-beat columns; horizontal scroll-snap on mobile. */
 export function BeatRails({ rails }: { rails: Record<Beat, ArticleCard[]> }) {
   return (
     <section aria-label="분야별 최신">
-      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:grid lg:grid-cols-5 lg:overflow-visible">
-        {BEAT_ORDER.map((b) => (
+      <div className={`no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:grid ${RAIL_COLS} lg:overflow-visible`}>
+        {NAV_BEATS.map((b) => (
           <QueueScope
             key={b}
             ctx={`home:rail:${b}`}
@@ -63,7 +66,7 @@ export function StoryList({ stories }: { stories: StoryDTO[] }) {
   return (
     <section aria-labelledby="stories-h">
       <h2 id="stories-h" className="kicker mb-3 text-fg-3">
-        진행 중인 이야기
+        이어지는 이슈
       </h2>
       <ul className="space-y-2">
         {stories.map((s) => (

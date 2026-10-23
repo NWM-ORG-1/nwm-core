@@ -195,7 +195,7 @@ function val(n: unknown): string {
 export const fearGreedAdapter = defineAdapter({
   key: "index.feargreed",
   label: "코인 공포·탐욕 지수 (alternative.me)",
-  description: "비교 기준용 외부 지수(일 1회). 센티먼트 그림자 운영 때 우리 지수와 견줘 봅니다. 화면에 쓸 땐 출처 표기.",
+  description: "비교 기준용 외부 지수(일 1회). 투자심리지수 그림자 운영 때 우리 지수와 견줘 봅니다. 화면에 쓸 땐 출처 표기.",
   kind: "api",
   group: "market",
   configSchema: z.object({}),

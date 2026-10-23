@@ -8,9 +8,9 @@ export function FiveThings({ items }: { items: Array<{ lead: ArticleCard; update
   return (
     <section aria-labelledby="five-h" className="panel flex h-full flex-col p-5">
       <h2 id="five-h" className="kicker mb-4 text-fg-3">
-        지금 알아야 할 {items.length}가지
+        주요 뉴스
       </h2>
-      <QueueScope ctx="home:five" label="지금 알아야 할 것" items={items.map(({ lead: c }) => ({ s: c.slug, t: c.title, b: c.beat, r: c.readSeconds }))} className="flex-1">
+      <QueueScope ctx="home:five" label="주요 뉴스" items={items.map(({ lead: c }) => ({ s: c.slug, t: c.title, b: c.beat, r: c.readSeconds }))} className="flex-1">
         <ol className="flex h-full flex-col justify-between gap-1">
           {items.map(({ lead, updates }, i) => (
             <li key={lead.slug} className="group relative flex gap-4 border-b border-line pb-3.5 pt-1 last:border-0 last:pb-0">

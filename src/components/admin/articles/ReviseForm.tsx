@@ -251,11 +251,11 @@ export function ReviseForm({
   const errors = {
     stale: stale ? `다른 편집자가 r${live.revision}을 먼저 저장했습니다 — 최신 버전을 불러온 뒤 다시 적용하세요` : null,
     title: !title.trim() ? "제목을 입력하세요" : title.trim().length > 120 ? "제목은 120자 이하입니다" : null,
-    dek: !dek.trim() ? "시그널을 입력하세요" : dek.trim().length > 300 ? "시그널은 300자 이하입니다" : null,
+    dek: !dek.trim() ? "요약을 입력하세요" : dek.trim().length > 300 ? "요약은 300자 이하입니다" : null,
     blocks: v.syntax ? "JSON 문법 오류" : v.issues ? `블록 검증 오류 ${v.issues.length}건` : null,
     reason: reason.trim().length < 2 ? "수정 사유를 2자 이상 적으세요 (내부 기록)" : reason.trim().length > 200 ? "200자 이하로 적으세요" : null,
     note: kind && note.trim().length < 5 ? "공개 정정문을 5자 이상 적으세요" : kind && note.trim().length > 500 ? "500자 이하로 적으세요" : null,
-    changes: !changes.any ? "바뀐 내용이 없습니다. 제목·시그널·본문 중 하나 이상을 고치세요." : null,
+    changes: !changes.any ? "바뀐 내용이 없습니다. 제목·요약·본문 중 하나 이상을 고치세요." : null,
   };
   const invalid = Object.values(errors).some(Boolean);
   const show = (k: keyof typeof errors) => (tried ? errors[k] : null);
@@ -361,7 +361,7 @@ export function ReviseForm({
         <div>
           <label htmlFor={`${uid}-dek`} className={label}>
             <span>
-              시그널 (리드 한 줄) <span className="text-bad" aria-hidden="true">*</span>
+              요약 (리드 한 줄) <span className="text-bad" aria-hidden="true">*</span>
             </span>
             <span className={cx("tabular font-mono text-[11px]", dek.trim().length > 300 ? "text-bad" : "text-fg-4")}>{dek.trim().length}/300</span>
           </label>
@@ -477,7 +477,7 @@ export function ReviseForm({
                 </p>
                 <h3 className="text-[22px] font-extrabold leading-[1.25] tracking-[-0.03em] text-fg">{title.trim() || "제목 없음"}</h3>
                 <div className="mt-3 border-l-2 border-ice/60 pl-3.5">
-                  <p className="kicker mb-1 text-ice">시그널</p>
+                  <p className="kicker mb-1 text-ice">요약</p>
                   <p className="text-[15.5px] font-medium leading-relaxed text-fg-2">{dek.trim() || "—"}</p>
                 </div>
                 <div className="mt-6">
@@ -609,7 +609,7 @@ export function ReviseForm({
             {changes.any ? (
               <>
                 변경:{" "}
-                {[changes.title && "제목", changes.dek && "시그널", changes.body && `본문 +${changes.added} −${changes.removed}`].filter(Boolean).join(" · ")}
+                {[changes.title && "제목", changes.dek && "요약", changes.body && `본문 +${changes.added} −${changes.removed}`].filter(Boolean).join(" · ")}
                 {article.status === "published" ? " — 저장 즉시 독자 화면에 반영됩니다" : " — 비공개 상태라 독자에게는 보이지 않습니다"}
               </>
             ) : (

@@ -25,7 +25,7 @@ interface BybitEnvelope<T> {
 export const bybitDerivsAdapter = defineAdapter({
   key: "market.bybit",
   label: "바이비트 선물 지표",
-  description: "바이비트 USDT 무기한 선물의 펀딩비·미결제약정·롱숏 계정 비율(1시간). 센티먼트 지수의 시장 입력입니다.",
+  description: "바이비트 USDT 무기한 선물의 펀딩비·미결제약정·롱숏 계정 비율(1시간). 투자심리지수의 시장 입력입니다.",
   kind: "api",
   group: "market",
   configSchema: bybitConfig,

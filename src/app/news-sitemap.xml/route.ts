@@ -10,7 +10,7 @@ export async function GET() {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
 ${items
   .map(
-    (a) => `<url><loc>${SITE.url}/a/${a.slug}</loc><news:news><news:publication><news:name>NWM 뉴웹미디어</news:name><news:language>ko</news:language></news:publication><news:publication_date>${a.publishedAt}</news:publication_date><news:title>${esc(a.title)}</news:title></news:news></url>`,
+    (a) => `<url><loc>${SITE.url}/a/${a.slug}</loc><news:news><news:publication><news:name>${esc(SITE.name)}</news:name><news:language>ko</news:language></news:publication><news:publication_date>${a.publishedAt}</news:publication_date><news:title>${esc(a.title)}</news:title></news:news></url>`,
   )
   .join("\n")}
 </urlset>`;

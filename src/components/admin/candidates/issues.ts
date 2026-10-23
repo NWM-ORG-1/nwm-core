@@ -17,7 +17,7 @@ export interface FieldIssue {
 
 const FIELD_KO: Record<string, string> = {
   title: "제목",
-  dek: "시그널",
+  dek: "요약",
   blocks: "본문 블록",
   items: "항목",
   value: "값",

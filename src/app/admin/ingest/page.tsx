@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "수집 현황" };
 
 const JOB_LABEL: Record<string, string> = {
   "sentiment.score": "게시물 분류 (10분)",
-  "sentiment.index": "센티먼트 계산 (매시 5분)",
+  "sentiment.index": "투자심리지수 계산 (매시 5분)",
   "market.derived": "김치 프리미엄 (10분)",
   retention: "보관 기한 정리 (매일 04:30)",
 };

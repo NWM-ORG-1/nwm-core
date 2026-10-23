@@ -12,10 +12,10 @@ export function PulseSentiment() {
     <section aria-labelledby="senti-h" className="panel brackets p-4">
       <div className="mb-2 flex items-baseline justify-between">
         <h2 id="senti-h" className="kicker text-fg-3">
-          NWM 센티먼트 인덱스
+          NWM 투자심리지수
         </h2>
         <Link href="/sentiment" className="text-[12px] text-ice hover:underline">
-          대시보드 →
+          자세히 보기 →
         </Link>
       </div>
       <div className="flex h-[150px] items-center justify-center">
@@ -31,7 +31,7 @@ export function PulseSentiment() {
           <div className="skeleton h-[120px] w-[180px] opacity-60" />
         )}
       </div>
-      <p className="mt-1 text-[11.5px] leading-relaxed text-fg-4">커뮤니티·소셜 언급의 긍정·부정을 집계한 지수 (−100 공포 ~ +100 탐욕)</p>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-fg-4">커뮤니티와 SNS 글의 낙관·비관을 집계한 지수입니다. −100은 극단적 공포, +100은 극단적 탐욕입니다.</p>
     </section>
   );
 }

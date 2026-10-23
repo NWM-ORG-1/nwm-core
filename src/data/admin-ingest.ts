@@ -8,7 +8,7 @@ import { getAdapter } from "@/ingest/registry";
 import { requireStaff } from "@/server/auth";
 
 /**
- * Read models for the collection screens (수집 현황, 센티먼트, source health).
+ * Read models for the collection screens (수집 현황, 투자심리, source health).
  * Always dynamic; staff re-verified like every admin loader.
  */
 

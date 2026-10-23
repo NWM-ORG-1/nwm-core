@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
+import { SITE } from "@/lib/site";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "NWM 뉴웹미디어",
+    name: "뉴웹미디어",
     short_name: "NWM",
-    description: "소음은 빼고, 신호만. AI·크립토·경제·테크와 투자자 심리.",
+    description: SITE.description,
     start_url: "/",
     display: "standalone",
     background_color: "#05060a",

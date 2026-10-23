@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, notInArray, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db/client";
 import {
@@ -12,7 +12,7 @@ import {
   stories,
   type Beat,
 } from "@/db/schema";
-import { BEAT_ORDER } from "@/lib/beats";
+import { BEAT_ORDER, CRYPTO_LOW_PROFILE } from "@/lib/beats";
 import { T } from "@/lib/cache-tags";
 import { clusterTop } from "@/lib/rank";
 import { related } from "@/lib/recommend";
@@ -511,6 +511,9 @@ export async function getSentimentDashboard(): Promise<{ index: SentimentDTO | n
 
 /* ─────────────────────────── live pulse & search ─────────────────────────── */
 
+/** Quotes from crypto exchanges stay off the ticker while the crypto beat is lowered. */
+const CRYPTO_QUOTE_SOURCES = ["binance", "upbit", "bithumb"];
+
 /** The only live data on public pages. Polled by the client; never baked into page HTML. */
 export async function getPulse(): Promise<Pulse> {
   "use cache";
@@ -523,7 +526,17 @@ export async function getPulse(): Promise<Pulse> {
       .where(published)
       .orderBy(desc(articles.publishedAt))
       .limit(30),
-    db.select().from(marketQuotes).where(and(eq(marketQuotes.inTicker, true), visibleQuote)).orderBy(asc(marketQuotes.sort)),
+    db
+      .select()
+      .from(marketQuotes)
+      .where(
+        and(
+          eq(marketQuotes.inTicker, true),
+          visibleQuote,
+          CRYPTO_LOW_PROFILE ? notInArray(marketQuotes.source, CRYPTO_QUOTE_SOURCES) : undefined,
+        ),
+      )
+      .orderBy(asc(marketQuotes.sort)),
     db
       .select({ score: sentimentSnapshots.score, ch: sentimentSnapshots.change24h })
       .from(sentimentSnapshots)

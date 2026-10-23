@@ -63,12 +63,12 @@ export async function runAutoArticles(db: DB, now: Date, settings?: AutoSettings
     } else {
       const sentiment = await publicSentiment(db);
       if (!sentiment) {
-        report.skipped.push("센티먼트 데일리: 지수 비공개 또는 최근 값 없음");
+        report.skipped.push("투자심리 데일리: 지수 비공개 또는 최근 값 없음");
         continue;
       }
       const draft = buildDataDraft("sentiment_daily", { quotes: [], sentiment, dateLabel: dateLabel(now) });
       if (!draft) {
-        report.skipped.push("센티먼트 데일리: 인덱스 값 없음");
+        report.skipped.push("투자심리 데일리: 지수 값 없음");
         continue;
       }
       await store(template, draft, key, [], `정기 자동 기사 · 매일 ${setting.time} (KST)`);

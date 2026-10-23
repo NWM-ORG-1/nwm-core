@@ -1,12 +1,18 @@
+import { CRYPTO_LOW_PROFILE } from "@/lib/beats";
+
+/** The fields the paper names about itself (crypto is left out while CRYPTO_LOW_PROFILE is on). */
+const FIELDS = CRYPTO_LOW_PROFILE ? ["AI", "경제", "테크"] : ["AI", "크립토", "경제", "테크"];
+
 export const SITE = {
   name: "뉴웹미디어",
   nameEn: "New Web Media",
   short: "NWM",
   domain: "newweb.media",
   url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://newweb.media").replace(/\/$/, ""),
-  tagline: "소음은 빼고, 신호만.",
-  description:
-    "AI · 크립토 · 경제 · 테크, 그리고 투자자 심리. 지금 알아야 할 신호만 짧고 정확하게 전하는 인터넷 신문.",
+  /** "AI·경제·테크" */
+  fields: FIELDS.join("·"),
+  tagline: `${FIELDS.join("·")} 전문 인터넷신문`,
+  description: `뉴웹미디어는 ${FIELDS.join(", ")} 분야의 소식과 투자자 심리를 다루는 인터넷신문입니다.`,
   email: "desk@newweb.media",
 } as const;
 
@@ -55,7 +61,7 @@ export const LEGAL_CONTACT_KEYS: ReadonlySet<keyof Legal> = new Set(["email", "r
 export const PENDING = "등록 예정";
 
 export const LEGAL_DEFAULTS: Legal = {
-  title: "뉴웹미디어(NWM)",
+  title: "뉴웹미디어",
   company: PENDING,
   regNo: PENDING,
   regDate: PENDING,

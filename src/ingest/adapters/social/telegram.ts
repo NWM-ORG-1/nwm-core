@@ -87,7 +87,7 @@ function toOutputs(msgs: TgMessage[], channel: string, c: { output: Array<"items
 export const telegramChannelAdapter = defineAdapter({
   key: "telegram.channel",
   label: "텔레그램 공개 채널",
-  description: "t.me/s 공개 미리보기로 채널 글을 읽습니다(계정 불필요). 뉴스 채널은 인박스로, 센티먼트용은 posts로. AI 채점은 운영자 동의(llmConsent)가 있을 때만.",
+  description: "t.me/s 공개 미리보기로 채널 글을 읽습니다(계정 불필요). 뉴스 채널은 인박스로, 투자심리용은 posts로. AI 채점은 운영자 동의(llmConsent)가 있을 때만.",
   kind: "scrape",
   group: "social",
   configSchema: channelConfig,

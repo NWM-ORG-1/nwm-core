@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cache, Suspense } from "react";
 import { getAdminShell } from "@/data/admin";
 import { Icon } from "@/components/ui/Icon";
-import { ArrowMark } from "@/components/ui/Wordmark";
+import { Wordmark } from "@/components/ui/Wordmark";
 import { AdminNav, AdminNavList, AdminNavPills, AdminNavPillsList, type AdminNavItem } from "./AdminNav";
 import { Badge } from "./ui";
 
@@ -19,7 +19,7 @@ function navItems(shell: Awaited<ReturnType<typeof getAdminShell>>): AdminNavIte
     { href: "/admin/auto", label: "자동 기사" },
     { href: "/admin/sources", label: "소스", count: shell.counts.sourceErrors, alert: shell.counts.sourceErrors > 0 },
     { href: "/admin/ingest", label: "수집 현황" },
-    { href: "/admin/sentiment", label: "센티먼트" },
+    { href: "/admin/sentiment", label: "투자심리" },
     { href: "/admin/experiments", label: "실험 (가설)" },
     { href: "/admin/activity", label: "활동 로그" },
     { href: "/admin/settings", label: "설정" },
@@ -32,8 +32,7 @@ export async function Sidebar() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-4 pb-4 pt-5">
-        <ArrowMark size={17} />
-        <span className="text-[17px] font-extrabold tracking-[-0.03em] text-ice">NWM</span>
+        <Wordmark size="sm" />
         <span className="hud ml-1 text-fg-3">NEWSROOM</span>
       </div>
       {shell.demo && (

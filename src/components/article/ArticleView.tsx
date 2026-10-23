@@ -45,7 +45,7 @@ export function ArticleView({ a }: { a: ArticleFull }) {
           {a.title}
         </h1>
         <div className="mt-5 border-l-2 border-ice/60 pl-4">
-          <p className="kicker mb-1.5 text-ice">시그널</p>
+          <p className="kicker mb-1.5 text-ice">요약</p>
           <p className="text-[18px] font-medium leading-relaxed text-fg-2 sm:text-[19.5px]">{a.dek}</p>
         </div>
         {/* Two fixed rows: the layout does not reflow when the web font swaps in. */}
@@ -122,7 +122,7 @@ export function ArticleView({ a }: { a: ArticleFull }) {
 
         <details className="group rounded-xl border border-line px-4 py-3 open:bg-bg-1">
           <summary className="flex cursor-pointer list-none items-center justify-between text-[13.5px] font-semibold text-fg-2">
-            이 기사는 이렇게 만들어졌습니다
+            기사 제작 정보
             <span className="kicker text-fg-4 group-open:hidden">펼치기</span>
           </summary>
           <dl className="mt-3 grid grid-cols-[96px_1fr] gap-y-2 text-[13px] text-fg-3">

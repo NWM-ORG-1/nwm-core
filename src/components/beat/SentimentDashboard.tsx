@@ -15,7 +15,7 @@ export async function SentimentDashboard() {
     <section aria-labelledby="dash-h" className="mt-12">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3 border-b border-line pb-2.5">
         <h2 id="dash-h" className="text-[19px] font-bold tracking-[-0.02em] text-fg">
-          NWM 센티먼트 인덱스
+          NWM 투자심리지수
         </h2>
         <p className="text-[12px] text-fg-4">
           {index.live ? "국내 커뮤니티 · 텔레그램 · X 게시물과 시장 지표 · 1시간 단위 · 베타" : "샘플 데이터 · 커뮤니티 언급 집계 예시"} ·{" "}
@@ -46,10 +46,10 @@ export async function SentimentDashboard() {
         </div>
         <div className="grid gap-4">
           <ChartBlock
-            title="인덱스 24시간 추이"
+            title="지수 24시간 추이"
             unit=""
             points={index.history.map((p) => p.score)}
-            source={index.live ? `NWM 센티먼트 인덱스 v1${index.confidence !== null ? ` · 신뢰도 ${Math.round(index.confidence * 100)}%` : ""}` : "NWM 센티먼트 집계 (샘플)"}
+            source={index.live ? `NWM 투자심리지수 v1${index.confidence !== null ? ` · 신뢰도 ${Math.round(index.confidence * 100)}%` : ""}` : "NWM 투자심리 집계 (샘플)"}
           />
           <div className="panel p-4">
             <p className="kicker mb-3 text-fg-3">소스별 심리</p>

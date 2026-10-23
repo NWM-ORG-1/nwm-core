@@ -9,20 +9,20 @@ import { mono, pixel } from "./fonts";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: `NWM 뉴웹미디어 — ${SITE.tagline}`,
-    template: "%s · NWM",
+    default: `${SITE.name} | ${SITE.tagline}`,
+    template: `%s | ${SITE.name}`,
   },
   description: SITE.description,
-  applicationName: "NWM 뉴웹미디어",
+  applicationName: SITE.name,
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: "NWM 뉴웹미디어",
+    siteName: SITE.name,
     url: SITE.url,
   },
   twitter: { card: "summary_large_image" },
   alternates: {
-    types: { "application/rss+xml": [{ url: "/rss.xml", title: "NWM 뉴웹미디어 — 최신 기사" }] },
+    types: { "application/rss+xml": [{ url: "/rss.xml", title: `${SITE.name} 최신 기사` }] },
   },
   formatDetection: { telephone: false, address: false, email: false },
 };

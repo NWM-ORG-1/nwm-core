@@ -40,7 +40,7 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
   switch (doc as Doc) {
     case "ai":
       return (
-        <DocPage kicker="AI POLICY" title="AI 활용 원칙" lead="NWM은 AI를 취재와 작성의 도구로 씁니다. 판단과 책임은 사람에게 있습니다." updated="2026년 10월 (초안)">
+        <DocPage kicker="AI POLICY" title="AI 활용 원칙" lead="뉴웹미디어는 취재와 기사 작성에 AI를 씁니다. 무엇을 쓸지 판단하고 책임지는 것은 편집자입니다." updated="2026년 10월 (초안)">
           <DocSection title="1. 모든 기사에 표시합니다">
             <p>기사마다 AI가 어떻게 쓰였는지 배지로 표시하고, 기계가 읽을 수 있는 메타데이터(IPTC 디지털 출처 유형)도 함께 제공합니다.</p>
             <DocList
@@ -72,9 +72,9 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
           <DocSection title="5. 독자 데이터를 학습에 쓰지 않습니다">
             <p>추천과 읽음 기록은 독자의 기기 안에서만 계산·저장됩니다. 서버에는 개인을 식별하지 않는 기사별 조회·완독 집계만 남습니다.</p>
           </DocSection>
-          <DocSection title="6. 센티먼트 지수의 AI 분류">
+          <DocSection title="6. 투자심리지수의 AI 분류">
             <p>
-              센티먼트 인덱스는 커뮤니티·소셜 게시물의 낙관·비관 분류에 AI(Anthropic Claude)를 씁니다. AI 분석에 동의하지 않은 출처는 규칙 기반으로만 분류합니다. 방법과 한계는{" "}
+              NWM 투자심리지수는 커뮤니티와 SNS 게시물의 낙관·비관 분류에 AI(Anthropic Claude)를 씁니다. AI 분석에 동의하지 않은 출처는 규칙 기반으로만 분류합니다. 방법과 한계는{" "}
               <Link href="/sentiment/method" className="text-ice hover:underline">
                 산출 방법
               </Link>

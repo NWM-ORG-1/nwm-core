@@ -55,8 +55,8 @@ export function SentimentPublishSwitch({ isPublic }: { isPublic: boolean }) {
         disabled={pending}
         onClick={() => {
           const q = isPublic
-            ? "센티먼트 인덱스를 비공개(그림자 운영)로 돌릴까요? 사이트에서는 샘플이나 빈 화면이 보입니다."
-            : "센티먼트 인덱스를 ‘베타’로 공개할까요? 최근 48시간의 계산값도 함께 공개됩니다.";
+            ? "투자심리지수를 비공개(그림자 운영)로 돌릴까요? 사이트에서는 샘플이나 빈 화면이 보입니다."
+            : "투자심리지수를 ‘베타’로 공개할까요? 최근 48시간의 계산값도 함께 공개됩니다.";
           if (!window.confirm(q)) return;
           run(() => setSentimentPublic({ public: !isPublic }) as Promise<{ ok: boolean; message?: string; error?: string } | null>);
         }}

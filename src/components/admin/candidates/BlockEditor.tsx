@@ -108,7 +108,7 @@ export function BlockList({
     <div className="space-y-3">
       {blocks.length === 0 && (
         <p className="rounded-xl border border-dashed border-line-2 px-4 py-8 text-center text-[13px] leading-relaxed text-fg-3">
-          본문 블록이 없습니다. ‘왜 중요한가’부터 추가해 보세요 — 시그널 아래 1–3개 이유가 기본 구조입니다.
+          본문 블록이 없습니다. ‘왜 중요한가’부터 추가해 보세요 — 요약 아래 1–3개 이유가 기본 구조입니다.
         </p>
       )}
       {blocks.map((kb, i) => {
@@ -287,7 +287,7 @@ function AddBlockMenu({ onAdd, hasSentiment, count }: { onAdd: (t: BlockType) =>
             >
               <span className="text-[13px] font-semibold text-fg">{BLOCK_LABEL_KO[t]}</span>
               <span className="text-[11.5px] leading-snug text-fg-3">
-                {t === "sentiment" && !hasSentiment ? "센티먼트 스냅샷이 없으면 표시되지 않습니다" : BLOCK_HINT_KO[t]}
+                {t === "sentiment" && !hasSentiment ? "투자심리 스냅샷이 없으면 표시되지 않습니다" : BLOCK_HINT_KO[t]}
               </span>
             </button>
           ))}
@@ -672,7 +672,7 @@ function SentimentNote({ sentiment }: { sentiment?: SentimentSnapshot | null }) 
   ) : (
     <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-warn">
       <Icon name="info" size={14} className="mt-0.5 shrink-0" />
-      센티먼트 스냅샷이 없으면 표시되지 않습니다. 데이터 자동(B) 센티먼트 템플릿이나 수집기가 스냅샷을 붙인 초안에서 쓰세요.
+      투자심리 스냅샷이 없으면 표시되지 않습니다. 데이터 자동(B) 투자심리 템플릿이나 수집기가 스냅샷을 붙인 초안에서 쓰세요.
     </p>
   );
 }

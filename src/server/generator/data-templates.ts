@@ -87,12 +87,12 @@ export const DATA_TEMPLATES: Record<DataTemplateId, TemplateMeta> = {
     manual: true,
   },
   sentiment_daily: {
-    label: "센티먼트 데일리",
+    label: "투자심리 데일리",
     beat: "sentiment",
-    description: "NWM 센티먼트 인덱스와 종목별 심리 (지수를 공개한 뒤부터)",
+    description: "NWM 투자심리지수와 종목별 심리 (지수를 공개한 뒤부터)",
     trigger: { kind: "daily", defaultTime: "21:00" },
     adapters: ["html.list", "telegram.channel", "telegram.bot", "x.accounts"],
-    series: { slug: "auto-sentiment-daily", title: "센티먼트 데일리", summary: "NWM 센티먼트 인덱스의 하루 변화를 데이터로 정리합니다." },
+    series: { slug: "auto-sentiment-daily", title: "투자심리 데일리", summary: "NWM 투자심리지수의 하루 변화를 데이터로 정리합니다." },
     manual: true,
   },
   market_close: {
@@ -231,10 +231,10 @@ export function buildDataDraft(
   const assets = data.sentiment.filter((s) => s.scopeKey.startsWith("asset:")).sort((a, b) => b.volume - a.volume);
   const mover = [...assets].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h))[0];
   return {
-    title: `센티먼트 인덱스 ${Math.round(index.score)}, 하루 새 ${index.change24h >= 0 ? "+" : "−"}${Math.abs(Math.round(index.change24h))}`,
+    title: `투자심리지수 ${Math.round(index.score)}, 하루 새 ${index.change24h >= 0 ? "+" : "−"}${Math.abs(Math.round(index.change24h))}`,
     dek: mover
       ? `커뮤니티 심리가 가장 크게 움직인 곳은 ${mover.label}(${mover.change24h >= 0 ? "+" : "−"}${Math.abs(Math.round(mover.change24h))})이다.`
-      : "NWM 센티먼트 인덱스의 하루 변화를 정리했다.",
+      : "NWM 투자심리지수의 하루 변화를 정리했다.",
     blocks: [
       { type: "sentiment" },
       ...(assets.length
@@ -249,11 +249,11 @@ export function buildDataDraft(
         : []),
       { type: "section", label: "context", text: "점수는 커뮤니티·소셜 언급의 긍정·부정 비율과 시장 지표를 함께 집계한 지표다. 개별 게시물은 인용하지 않는다." },
     ],
-    tags: ["센티먼트 데일리", ...index.keywords.slice(0, 2)],
+    tags: ["투자심리 데일리", ...index.keywords.slice(0, 2)],
     tickers: [],
     sources: [
       { name: "커뮤니티·소셜 집계", kind: "data" },
-      { name: "NWM 센티먼트 산출 방법", kind: "data", url: "/sentiment/method" },
+      { name: "투자심리지수 산출 방법", kind: "data", url: "/sentiment/method" },
     ],
     sentiment: {
       score: index.score,

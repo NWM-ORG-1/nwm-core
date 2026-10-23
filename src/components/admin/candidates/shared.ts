@@ -43,7 +43,7 @@ export const BLOCK_HINT_KO: Record<BlockType, string> = {
   quote: "발언 인용과 출처",
   chart: "단일 시계열 선 차트",
   table: "비교표 (열 2–6개)",
-  sentiment: "발행 시점 센티먼트 스냅샷",
+  sentiment: "발행 시점 투자심리 스냅샷",
   next: "다음에 지켜볼 것 1–3개",
   deeper: "관련 스토리·기사·1차 자료 링크",
 };

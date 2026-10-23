@@ -129,7 +129,7 @@ export const sentimentIndexJob: Job = {
     const counts = new Map<string, number>();
     for (const p of all) for (const a of p.assets) counts.set(a, (counts.get(a) ?? 0) + 1);
     const scopes = [
-      { key: "index", label: "NWM 센티먼트 인덱스", posts: all },
+      { key: "index", label: "NWM 투자심리지수", posts: all },
       ...[...counts]
         .filter(([id, n]) => n >= MIN_POSTS_ASSET && KNOWN_ASSETS[id] && id !== "CRYPTO" && id !== "KR-EQ")
         .sort((a, b) => b[1] - a[1])

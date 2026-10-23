@@ -9,7 +9,7 @@ import { RichText } from "@/components/article/RichText";
 import { IntentLink } from "@/components/feed/IntentLink";
 import { LocalTime } from "@/components/ui/LocalTime";
 
-/** TOP SIGNAL — the lead story, rendered big with its "왜 중요한가". */
+/** TOP STORY — the lead story, rendered big with its "왜 중요한가". */
 export function Hero({ article, updates }: { article: ArticleFull; updates: number }) {
   const why = article.blocks.find((b) => b.type === "why");
   const chart = article.blocks.find((b) => b.type === "chart");
@@ -22,7 +22,7 @@ export function Hero({ article, updates }: { article: ArticleFull; updates: numb
           <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="hud inline-flex items-center gap-2 text-ice">
               <span className="size-1.5 animate-pulse-dot rounded-full bg-live" aria-hidden="true" />
-              TOP SIGNAL
+              TOP STORY
             </span>
             <BeatChip beat={article.beat} link />
             {article.isBreaking && <span className="hud text-live">BREAKING</span>}

@@ -28,7 +28,7 @@ export const SECTION_LABEL_KO: Record<SectionLabel, string> = {
 };
 
 export const BLOCK_TITLE_KO = {
-  signal: "시그널",
+  signal: "요약",
   why: "왜 중요한가",
   numbers: "숫자로 보면",
   sentiment: "투자자 심리",

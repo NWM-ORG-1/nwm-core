@@ -68,7 +68,7 @@ export function PrefsMenu() {
                 }`}
               >
                 <Icon name={t === "dark" ? "moon" : "sun"} size={14} />
-                {t === "dark" ? "다크" : "라이트 읽기"}
+                {t === "dark" ? "어둡게" : "밝게"}
               </button>
             ))}
           </div>

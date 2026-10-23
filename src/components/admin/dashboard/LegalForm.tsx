@@ -163,7 +163,7 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
             <span className="break-all text-fg-3">{emailField ? effective(emailField) : SITE.email}</span>
             {reportField && emailField && effective(reportField) !== effective(emailField) && <span className="break-all text-fg-3">제보·정정 {effective(reportField)}</span>}
             <span>
-              © {foundedField ? foundedYear(effective(foundedField)) : ""} {SITE.nameEn}
+              © {foundedField ? foundedYear(effective(foundedField)) : ""} {SITE.name}. 무단 전재 및 재배포 금지.
             </span>
           </p>
         </div>

@@ -57,7 +57,7 @@ function jsonLd(a: ArticleFull) {
       ? { "@type": "Person", name: a.author.name, url: `${SITE.url}/editors/${a.author.slug}` }
       : { "@type": "Organization", name: a.byline },
     editor: a.editor ? { "@type": "Person", name: a.editor.name, url: `${SITE.url}/editors/${a.editor.slug}` } : undefined,
-    publisher: { "@type": "NewsMediaOrganization", name: "NWM 뉴웹미디어", url: SITE.url, logo: { "@type": "ImageObject", url: `${SITE.url}/icon.svg` } },
+    publisher: { "@type": "NewsMediaOrganization", name: SITE.name, alternateName: SITE.short, url: SITE.url, logo: { "@type": "ImageObject", url: `${SITE.url}/icon.svg` } },
     // machine-readable AI provenance (IPTC digital source type)
     digitalSourceType: IPTC_SOURCE_TYPE[a.aiInvolvement],
     correction: a.corrections.map((c) => ({ "@type": "CorrectionComment", text: c.note, datePublished: c.publishedAt })),

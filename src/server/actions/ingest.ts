@@ -136,12 +136,12 @@ export async function setSentimentPublic(input: { public: boolean }): Promise<Ac
         kind: "settings",
         entityType: "settings",
         entityId: "sentiment",
-        summary: p.public ? "센티먼트 인덱스 공개 시작 (베타)" : "센티먼트 인덱스 비공개 전환 (그림자 운영)",
+        summary: p.public ? "투자심리지수 공개 시작 (베타)" : "투자심리지수 비공개 전환 (그림자 운영)",
       });
     });
     invalidateFromAction([T.sentiment]);
     refresh();
-    return ok(p.public ? "센티먼트 인덱스를 공개했습니다." : "센티먼트 인덱스를 다시 그림자 운영으로 돌렸습니다.");
+    return ok(p.public ? "투자심리지수를 공개했습니다." : "투자심리지수를 다시 그림자 운영으로 돌렸습니다.");
   } catch (e) {
     return fail(e);
   }

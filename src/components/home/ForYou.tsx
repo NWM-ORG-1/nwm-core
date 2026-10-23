@@ -31,9 +31,9 @@ export function ForYou({ pool }: { pool: MiniCard[] }) {
     <section aria-labelledby="foryou-h">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 id="foryou-h" className="kicker text-fg-3">
-          {personal ? "당신이 읽은 흐름에서" : "지금 많이 읽는"}
+          {personal ? "추천 기사" : "많이 읽는 기사"}
         </h2>
-        <span className="text-[11px] text-fg-4">기기 안에서만 계산</span>
+        <span className="text-[11px] text-fg-4">{personal ? "읽은 기록으로 이 기기에서 고름" : "최근 조회 기준"}</span>
       </div>
       <QueueScope ctx="home:foryou" label="추천" items={picks.map((c) => ({ s: c.s, t: c.t, b: c.b, r: c.r }))}>
         <ol className="space-y-px">

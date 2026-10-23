@@ -3,8 +3,8 @@ import Link from "next/link";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
 
 export const metadata: Metadata = {
-  title: "센티먼트 인덱스 산출 방법",
-  description: "NWM 센티먼트 인덱스의 입력 데이터, 가중치, 표준화, AI 분류 방식과 한계.",
+  title: "투자심리지수 산출 방법",
+  description: "NWM 투자심리지수의 입력 데이터, 가중치, 표준화, AI 분류 방식과 한계.",
 };
 
 /** Methodology for the sentiment index (method v1). Keep in step with src/sentiment/compute.ts. */
@@ -12,8 +12,8 @@ export default function SentimentMethodPage() {
   return (
     <DocPage
       kicker="METHODOLOGY · v1"
-      title="센티먼트 인덱스 산출 방법"
-      lead="커뮤니티의 말과 시장의 움직임을 함께 봅니다. −100은 극단적 공포, +100은 극단적 탐욕입니다."
+      title="투자심리지수 산출 방법"
+      lead="커뮤니티 글과 시장 지표를 함께 집계합니다. −100은 극단적 공포, +100은 극단적 탐욕입니다."
       updated="2026년 10월 · 베타"
     >
       <DocSection title="1. 무엇을 보나">

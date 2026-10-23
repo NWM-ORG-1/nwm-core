@@ -168,13 +168,13 @@ export function RevisionHistory({
               ) : (
                 <>
                   <DiffField label="제목" rows={diffs.title} leftLabel={`r${A.revision}`} rightLabel={`r${B.revision}`} />
-                  <DiffField label="시그널" rows={diffs.dek} leftLabel={`r${A.revision}`} rightLabel={`r${B.revision}`} />
+                  <DiffField label="요약" rows={diffs.dek} leftLabel={`r${A.revision}`} rightLabel={`r${B.revision}`} />
                   <DiffField label="본문" rows={diffs.body} leftLabel={`r${A.revision}`} rightLabel={`r${B.revision}`} />
                 </>
               )}
             </div>
           ) : (
-            <p className="px-3 py-3 text-[12.5px] text-fg-3">두 버전을 고르면 제목·시그널·본문을 나란히 비교합니다. 바뀐 단어는 강조됩니다.</p>
+            <p className="px-3 py-3 text-[12.5px] text-fg-3">두 버전을 고르면 제목·요약·본문을 나란히 비교합니다. 바뀐 단어는 강조됩니다.</p>
           )}
         </div>
       )}

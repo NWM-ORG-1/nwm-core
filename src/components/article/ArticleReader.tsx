@@ -343,7 +343,7 @@ export function NextUp({ slug, fallback }: { slug: string; fallback: Queue }) {
   if (!next) {
     return (
       <div className="panel brackets p-6 text-center">
-        <p className="text-[15px] font-semibold text-fg">‘{queue.label}’ 목록을 다 읽었어요.</p>
+        <p className="text-[15px] font-semibold text-fg">‘{queue.label}’ 목록의 기사를 모두 읽었습니다.</p>
         <Link href="/" className="mt-3 inline-block text-[14px] text-ice hover:underline">
           홈으로 →
         </Link>

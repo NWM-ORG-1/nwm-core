@@ -6,7 +6,7 @@ import { Ago } from "@/components/admin/feeds/time";
 import { SentimentPublishSwitch } from "@/components/admin/ingest/IngestSwitches";
 import { Badge, Card, cx, EmptyState, PageHeader, Stat, table } from "@/components/admin/ui";
 
-export const metadata: Metadata = { title: "센티먼트" };
+export const metadata: Metadata = { title: "투자심리" };
 
 const INPUT_LABEL: Record<string, string> = {
   funding_rate: "펀딩비",
@@ -19,7 +19,7 @@ const INPUT_LABEL: Record<string, string> = {
 
 export default function SentimentAdminPage() {
   return (
-    <Suspense fallback={<PageHeader kicker="SENTIMENT" title="센티먼트" />}>
+    <Suspense fallback={<PageHeader kicker="SENTIMENT" title="투자심리" />}>
       <Body />
     </Suspense>
   );
@@ -45,7 +45,7 @@ async function Body() {
     <>
       <PageHeader
         kicker="SENTIMENT · v1"
-        title="센티먼트 인덱스"
+        title="투자심리지수"
         description={
           <>
             {d.public ? "공개 중 (베타)" : "그림자 운영 중 — 계산은 하지만 사이트에는 나가지 않습니다."} 출시 전 2주 이상 공포·탐욕 지수와 비교해 보고 공개하세요.{" "}
@@ -67,7 +67,7 @@ async function Body() {
           <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Stat
-                label={index.shadow ? "인덱스 (그림자)" : "인덱스 (공개)"}
+                label={index.shadow ? "지수 (그림자)" : "지수 (공개)"}
                 value={index.score.toFixed(1)}
                 sub={
                   <>
@@ -81,7 +81,7 @@ async function Body() {
               <Stat label="AI 분류 비용 (이번 달)" value={`$${d.llm.usd.toFixed(2)}`} tone={d.llm.usd >= d.llm.budgetUsd ? "warn" : undefined} sub={`한도 $${d.llm.budgetUsd} (SENTIMENT_LLM_MONTHLY_USD)`} />
             </div>
 
-            <Card title="14일 추이 — NWM 인덱스와 코인 공포·탐욕 지수">
+            <Card title="14일 추이: 투자심리지수와 코인 공포·탐욕 지수">
               <CompareChart series={d.series} fearGreed={d.fearGreed} />
             </Card>
 
@@ -183,7 +183,7 @@ function CompareChart({ series, fearGreed }: { series: Array<{ at: string; score
   const lastFg = fearGreed[fearGreed.length - 1];
   return (
     <figure>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-40 w-full" role="img" aria-label={`최근 NWM 인덱스 ${last?.score ?? "없음"}, 공포·탐욕 지수 ${lastFg?.value ?? "없음"} (0–100)`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-40 w-full" role="img" aria-label={`최근 투자심리지수 ${last?.score ?? "없음"}, 공포·탐욕 지수 ${lastFg?.value ?? "없음"} (0–100)`}>
         <line x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} stroke="var(--line-2)" strokeDasharray="3 4" />
         {fg && <path d={fg} fill="none" stroke="var(--warn)" strokeWidth={1.5} opacity={0.8} />}
         {ours && <path d={ours} fill="none" stroke="var(--ice)" strokeWidth={2} />}
@@ -194,7 +194,7 @@ function CompareChart({ series, fearGreed }: { series: Array<{ at: string; score
       <figcaption className="mt-2 flex flex-wrap gap-4 text-[12px] text-fg-3">
         <span>
           <span className="mr-1.5 inline-block h-0.5 w-4 align-middle" style={{ background: "var(--ice)" }} />
-          NWM 인덱스 {last ? last.score.toFixed(1) : "—"}
+          투자심리지수 {last ? last.score.toFixed(1) : "—"}
         </span>
         <span>
           <span className="mr-1.5 inline-block h-0.5 w-4 align-middle" style={{ background: "var(--warn)" }} />

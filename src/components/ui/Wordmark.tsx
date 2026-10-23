@@ -1,34 +1,25 @@
-/** ↗ NWM — the family arrow mark (New Web Solutions) + monogram. */
-export function ArrowMark({ size = 18, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id="nwm-arrow" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--ice-3)" />
-          <stop offset="0.6" stopColor="var(--ice)" />
-          <stop offset="1" stopColor="var(--ice-2)" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M5 19 18.5 5.5M8.5 5.5h10v10"
-        fill="none"
-        stroke="url(#nwm-arrow)"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+/**
+ * ⌜NWM⌟ — the letters between the corner brackets the site uses for its HUD
+ * frames. Solid colours only (letters --fg, brackets --ice), so the light
+ * reading theme recolours it without a second asset.
+ */
 
-export function Wordmark({ withName = false, size = "md" }: { withName?: boolean; size?: "sm" | "md" | "lg" }) {
-  const text = size === "lg" ? "text-[30px]" : size === "sm" ? "text-[17px]" : "text-[21px]";
-  const icon = size === "lg" ? 28 : size === "sm" ? 15 : 19;
+const SIZES = {
+  sm: { font: 16, py: 4, px: 5, arm: 7, stroke: 2 },
+  md: { font: 21, py: 5, px: 6, arm: 9, stroke: 2 },
+  lg: { font: 34, py: 8, px: 10, arm: 14, stroke: 3 },
+} as const;
+
+export function Wordmark({ size = "md", className = "" }: { size?: keyof typeof SIZES; className?: string }) {
+  const s = SIZES[size];
+  const corner = { width: s.arm, height: s.arm } as const;
   return (
-    <span className="inline-flex items-center gap-2 select-none">
-      <ArrowMark size={icon} />
-      <span className={`${text} font-extrabold leading-none tracking-[-0.03em] text-ice`}>NWM</span>
-      {withName && <span className="hidden sm:inline text-[12.5px] font-medium tracking-[-0.01em] text-fg-3">뉴웹미디어</span>}
+    <span className={`relative inline-flex select-none items-center leading-none ${className}`} style={{ padding: `${s.py}px ${s.px}px` }}>
+      <span aria-hidden="true" className="absolute left-0 top-0 border-ice" style={{ ...corner, borderLeftWidth: s.stroke, borderTopWidth: s.stroke }} />
+      <span className="font-black tracking-[-0.045em] text-fg" style={{ fontSize: s.font }}>
+        NWM
+      </span>
+      <span aria-hidden="true" className="absolute bottom-0 right-0 border-ice" style={{ ...corner, borderRightWidth: s.stroke, borderBottomWidth: s.stroke }} />
     </span>
   );
 }

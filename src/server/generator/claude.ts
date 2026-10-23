@@ -107,7 +107,7 @@ export const SYSTEM_PROMPT = `당신은 뉴웹미디어(NWM)의 AI 초안 기자
 
 # 기사 구조
 - 제목(title): 45자 이내. 누가 무엇을 했는지 담은 평서형. 물음표·느낌표·따옴표·말줄임표를 쓰지 않습니다.
-- 시그널(dek): 1–2문장, 120자 이내. 무슨 일이 있었는지 한눈에 알게 합니다.
+- 요약(dek): 1–2문장, 120자 이내. 무슨 일이 있었는지 한눈에 알게 합니다.
 - 왜 중요한가(why): 1–3개, 각 한 문장. 독자(투자자·업계 종사자)에게 무엇이 달라지는지 씁니다.
 - 숫자로 보면(numbers): 자료에 있는 핵심 수치 2–4개. value는 짧게("1,234억 원", "+3.2%", "$1.2B"), label은 그 수치가 무엇인지 20자 이내로. 쓸 만한 수치가 2개보다 적으면 비웁니다.
 - 본문 단락(sections): 0–3개. label로 성격을 정합니다.
@@ -222,7 +222,7 @@ const keyNumberOut = z.object({
 
 export const DraftOut = z.object({
   title: z.string().describe("45자 이내 제목"),
-  dek: z.string().describe("시그널: 1–2문장, 120자 이내"),
+  dek: z.string().describe("요약: 1–2문장, 120자 이내"),
   why: z.array(z.string()).describe("왜 중요한가: 1–3개, 각 한 문장"),
   numbers: z.array(keyNumberOut).describe("숫자로 보면: 자료에 있는 수치 2–4개, 없으면 빈 배열"),
   sections: z
@@ -456,7 +456,7 @@ export async function writeDraft(
 
 /** The editor's draft as numbered lines, so edits can point back at a block. */
 function draftAsText(d: Draft): string {
-  const out = [`제목: ${d.title}`, `시그널: ${d.dek}`];
+  const out = [`제목: ${d.title}`, `요약: ${d.dek}`];
   d.blocks.forEach((b, n) => {
     switch (b.type) {
       case "why":
@@ -489,7 +489,7 @@ const ASSIST_TASK: Record<AssistAction, string> = {
   headlines:
     "과제: 이 기사의 제목 후보 3개를 씁니다. 각각 45자 이내이고, 서로 다른 각도(핵심 사실 / 숫자 / 의미)로 씁니다. 지금 제목과 같은 것은 빼고, 자료와 초안에 있는 사실만 씁니다.",
   tighten:
-    "과제: 초안을 더 짧게 다듬습니다. 사실·숫자·고유명사는 그대로 두고 군더더기만 뺍니다. 시그널은 1–2문장 90자 이내, 단락은 2문장 이내, 목록 항목은 한 문장으로 씁니다. 블록 번호(block)마다 고친 글을 돌려줍니다. section은 text를 고치거나(줄글 단락) items에 bullets를 담고, why·next는 items에 담습니다. 고칠 필요가 없는 블록과 그 밖의 블록은 빼고 돌려줍니다.",
+    "과제: 초안을 더 짧게 다듬습니다. 사실·숫자·고유명사는 그대로 두고 군더더기만 뺍니다. 요약은 1–2문장 90자 이내, 단락은 2문장 이내, 목록 항목은 한 문장으로 씁니다. 블록 번호(block)마다 고친 글을 돌려줍니다. section은 text를 고치거나(줄글 단락) items에 bullets를 담고, why·next는 items에 담습니다. 고칠 필요가 없는 블록과 그 밖의 블록은 빼고 돌려줍니다.",
   why: "과제: ‘왜 중요한가’ 항목 2–3개를 새로 씁니다. 독자(투자자·업계 종사자)에게 무엇이 달라지는지 각 한 문장으로 씁니다.",
   numbers: "과제: 자료에 있는 핵심 수치 2–4개로 ‘숫자로 보면’을 씁니다. 자료에 없는 숫자, 계산한 숫자는 쓰지 않습니다.",
   next: "과제: ‘다음 관전 포인트’ 2–3개를 씁니다. 자료에 나온 예정 일정·후속 절차·지켜볼 지표를 우선합니다.",
@@ -499,7 +499,7 @@ const note = z.string().describe("편집자에게 한 문장. 확인할 점이 �
 const ASSIST_OUT = {
   headlines: z.object({ titles: z.array(z.string()).describe("제목 후보 3개"), note }),
   tighten: z.object({
-    dek: z.string().describe("다듬은 시그널"),
+    dek: z.string().describe("다듬은 요약"),
     edits: z.array(z.object({ block: z.number().describe("블록 번호 #"), text: z.string().describe("section 줄글, 아니면 빈 문자열"), items: z.array(z.string()).describe("why·next 항목이나 section bullets, 아니면 빈 배열") })),
     note,
   }),

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Beat } from "@/db/schema";
-import { BEATS, BEAT_ORDER } from "@/lib/beats";
+import { BEATS, NAV_BEATS } from "@/lib/beats";
 import { refreshPulse, usePulse } from "@/lib/client/pulse";
 import { useLastVisit, useReadHistory } from "@/lib/client/reading";
 import { readTimeLabel } from "@/lib/content/meta";
@@ -71,7 +71,7 @@ export function RiverClient({
     <div className="flex items-center gap-3 py-3" role="separator" aria-label="마지막 방문 이전 기사">
       <span className="h-px flex-1 bg-gradient-to-r from-transparent to-ice/50" />
       <span className="kicker text-ice">
-        {allCaughtUp ? "✓ 지난 방문 이후 소식을 모두 확인했어요" : `↑ 지난 방문 이후 ${sinceCount}건${allNew ? " 이상" : ""}`}
+        {allCaughtUp ? "✓ 지난 방문 이후 기사를 모두 봤습니다" : `↑ 지난 방문 이후 ${sinceCount}건${allNew ? " 이상" : ""}`}
       </span>
       <span className="h-px flex-1 bg-gradient-to-l from-transparent to-ice/50" />
     </div>
@@ -103,7 +103,7 @@ export function RiverClient({
     <QueueScope ctx={ctx} label={label} items={queueItems}>
       {filterable && (
         <div className="no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="분야 필터">
-          {(["all", ...BEAT_ORDER] as const).map((b) => (
+          {(["all", ...NAV_BEATS] as const).map((b) => (
             <button
               key={b}
               type="button"

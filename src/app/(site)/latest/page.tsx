@@ -4,7 +4,7 @@ import { getArchiveDays, getLatest } from "@/data/public";
 import { RiverClient } from "@/components/feed/RiverClient";
 import { toMini } from "@/components/feed/types";
 
-export const metadata: Metadata = { title: "최신 기사", description: "NWM의 모든 기사를 시간순으로.", alternates: { canonical: "/latest" } };
+export const metadata: Metadata = { title: "최신 기사", description: "뉴웹미디어의 모든 기사를 발행 순서대로 모았습니다.", alternates: { canonical: "/latest" } };
 
 export default async function LatestPage() {
   const [cards, days] = await Promise.all([getLatest(150), getArchiveDays(14)]);
@@ -14,7 +14,7 @@ export default async function LatestPage() {
         <div className="lg:col-span-8">
           <p className="hud text-ice">RIVER</p>
           <h1 className="mt-3 text-[34px] font-extrabold tracking-[-0.035em] text-fg">최신 기사</h1>
-          <p className="mt-2 text-[15px] text-fg-3">발행된 모든 기사를 시간순으로 봅니다. J/K로 이동, Enter로 열기.</p>
+          <p className="mt-2 text-[15px] text-fg-3">모든 기사를 최신순으로 보여 드립니다. J·K 키로 이동하고 Enter로 엽니다.</p>
           <div className="mt-8">
             <RiverClient cards={cards.map(toMini)} ctx="latest" label="최신 기사" live filterable headingLevel={2} />
           </div>

@@ -18,7 +18,7 @@ export const BEATS: Record<Beat, BeatMeta> = {
     path: "/ai",
     code: "AI",
     color: "#a8a4f0",
-    blurb: "모델, 칩, 돈의 흐름. AI 산업에서 실제로 움직이는 것만.",
+    blurb: "AI 모델과 반도체, 관련 기업의 사업과 투자 소식을 다룹니다.",
   },
   crypto: {
     id: "crypto",
@@ -26,7 +26,7 @@ export const BEATS: Record<Beat, BeatMeta> = {
     path: "/crypto",
     code: "CRY",
     color: "#e2b36e",
-    blurb: "가격보다 구조. 온체인·거래소·자금 흐름으로 읽는 디지털자산.",
+    blurb: "가상자산 시세와 거래소 공지, 규제, 온체인 자금 흐름을 다룹니다.",
   },
   economy: {
     id: "economy",
@@ -34,7 +34,7 @@ export const BEATS: Record<Beat, BeatMeta> = {
     path: "/economy",
     code: "ECO",
     color: "#6fcfa5",
-    blurb: "금리, 환율, 수출. 지갑과 포트폴리오에 닿는 거시경제.",
+    blurb: "금리와 환율, 물가, 수출 등 국내외 경제 지표와 정책을 다룹니다.",
   },
   tech: {
     id: "tech",
@@ -42,19 +42,30 @@ export const BEATS: Record<Beat, BeatMeta> = {
     path: "/tech",
     code: "TEC",
     color: "#78c4e6",
-    blurb: "반도체와 빅테크, 모빌리티. 기술이 시장을 바꾸는 순간.",
+    blurb: "반도체와 빅테크, 플랫폼 기업의 사업과 실적 소식을 다룹니다.",
   },
   sentiment: {
     id: "sentiment",
-    label: "센티먼트",
+    label: "투자심리",
     path: "/sentiment",
     code: "SNT",
     color: "#e58bb5",
-    blurb: "커뮤니티와 소셜에서 측정한 투자자 심리. 군중은 지금 어디로 쏠리는가.",
+    blurb: "커뮤니티와 SNS 글, 시장 지표로 집계한 투자자 심리를 보여 드립니다.",
   },
 };
 
 export const BEAT_ORDER: Beat[] = ["ai", "crypto", "economy", "tech", "sentiment"];
+
+/**
+ * Temporary, while the 인터넷신문 registration is under review: the crypto beat
+ * is not put forward. Its pages and articles still work by URL, but it leaves
+ * the navigation, the tagline, the home page and the ticker. Set to false to
+ * bring it back everywhere.
+ */
+export const CRYPTO_LOW_PROFILE = true;
+
+/** Beats offered in navigation and beat lists. */
+export const NAV_BEATS: Beat[] = BEAT_ORDER.filter((b) => !(CRYPTO_LOW_PROFILE && b === "crypto"));
 
 export function isBeat(v: string): v is Beat {
   return v in BEATS;

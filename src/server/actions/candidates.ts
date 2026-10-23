@@ -87,7 +87,7 @@ export async function createDataAuto(input: { template: string }): Promise<Actio
     let draft: Draft | null = null;
     if (template === "sentiment_daily") {
       const sentiment = await publicSentiment(db);
-      if (!sentiment) throw new NewsroomError("센티먼트 인덱스를 공개로 전환한 뒤 만들 수 있습니다 (센티먼트 화면).", "invalid");
+      if (!sentiment) throw new NewsroomError("투자심리지수를 공개로 전환한 뒤 만들 수 있습니다 (투자심리 화면).", "invalid");
       draft = buildDataDraft(template, { quotes: [], sentiment, dateLabel: dateKST(now) });
     } else {
       const market = await marketInputs(db, now);

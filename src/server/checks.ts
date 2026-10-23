@@ -19,7 +19,7 @@ export interface CheckItem {
 }
 
 export const CHECK_META: Record<CheckId, { label: string; blocking: boolean }> = {
-  format: { label: "형식 (제목·시그널·본문)", blocking: true },
+  format: { label: "형식 (제목·요약·본문)", blocking: true },
   sources: { label: "1차 출처", blocking: true },
   license: { label: "라이선스·인용 범위", blocking: true },
   ai_label: { label: "AI 표기·책임 편집자", blocking: true },
@@ -117,8 +117,8 @@ export function runChecks(input: {
   };
 
   // format
-  const missing = [!draft.title.trim() && "제목", !draft.dek.trim() && "시그널", draft.blocks.length === 0 && "본문 블록"].filter(Boolean);
-  push("format", missing.length === 0, missing.length ? `${missing.join(", ")} 필요` : "제목·시그널·본문 블록 확인");
+  const missing = [!draft.title.trim() && "제목", !draft.dek.trim() && "요약", draft.blocks.length === 0 && "본문 블록"].filter(Boolean);
+  push("format", missing.length === 0, missing.length ? `${missing.join(", ")} 필요` : "제목·요약·본문 블록 확인");
 
   // sources
   const primaryItem = usable.some((i) => i.trustTier <= 2);
@@ -184,13 +184,13 @@ export function runChecks(input: {
   // brevity
   const issues: string[] = [];
   if (draft.title.length > 45) issues.push(`제목 ${draft.title.length}자 (권장 ≤45)`);
-  if (sentences(draft.dek).length > 2 || draft.dek.length > 120) issues.push("시그널은 1–2문장");
+  if (sentences(draft.dek).length > 2 || draft.dek.length > 120) issues.push("요약은 1–2문장");
   for (const b of draft.blocks) {
     if (b.type === "section" && b.text && sentences(b.text).length > 3) issues.push("3문장 넘는 단락");
     if (b.type === "why" && b.items.length > 3) issues.push("왜 중요한가 3개 초과");
   }
   if (draft.blocks.length > 8) issues.push(`블록 ${draft.blocks.length}개 (권장 ≤8)`);
-  push("brevity", issues.length === 0, issues.length ? [...new Set(issues)].join(" · ") : "짧고 구조적");
+  push("brevity", issues.length === 0, issues.length ? [...new Set(issues)].join(" · ") : "간결함");
 
   // duplicate
   const best = input.recentTitles.reduce(

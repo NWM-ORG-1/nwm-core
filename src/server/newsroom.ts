@@ -209,7 +209,7 @@ export interface PublishResult {
 
 const strictDraft = draftSchema.superRefine((d, ctx) => {
   if (!d.title.trim()) ctx.addIssue({ code: "custom", message: "제목이 비어 있습니다", path: ["title"] });
-  if (!d.dek.trim()) ctx.addIssue({ code: "custom", message: "시그널(요약)이 비어 있습니다", path: ["dek"] });
+  if (!d.dek.trim()) ctx.addIssue({ code: "custom", message: "요약이 비어 있습니다", path: ["dek"] });
   if (d.blocks.length === 0) ctx.addIssue({ code: "custom", message: "본문 블록이 없습니다", path: ["blocks"] });
 });
 

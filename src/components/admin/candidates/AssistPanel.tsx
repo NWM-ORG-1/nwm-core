@@ -12,7 +12,7 @@ import { clockSecKST } from "./shared";
 
 const ACTIONS: Array<{ id: AssistAction; label: string; hint: string }> = [
   { id: "headlines", label: "제목 후보", hint: "45자 안팎 제목 3개" },
-  { id: "tighten", label: "간결하게", hint: "시그널·단락을 더 짧게" },
+  { id: "tighten", label: "간결하게", hint: "요약·단락을 더 짧게" },
   { id: "why", label: "왜 중요한가", hint: "이유 블록 제안" },
   { id: "numbers", label: "숫자로 보면", hint: "원문 수치 추출" },
   { id: "next", label: "다음 관전 포인트", hint: "후속 체크 포인트" },
@@ -76,7 +76,7 @@ export function AssistPanel({
   };
 
   const regenerate = () => {
-    if (!window.confirm("초안 전체를 원천 자료로 다시 생성합니다.\n지금 편집한 제목·시그널·본문 블록이 모두 대체됩니다. 계속할까요?")) return;
+    if (!window.confirm("초안 전체를 원천 자료로 다시 생성합니다.\n지금 편집한 제목·요약·본문 블록이 모두 대체됩니다. 계속할까요?")) return;
     setError(null);
     setBusy("regenerate");
     start(async () => {
@@ -252,7 +252,7 @@ function SuggestionCard({
 
         {!readOnly && r.action === "tighten" && (
           <button type="button" onClick={() => onTighten(r.dek, r.blocks)} className={cx(btn.base, btn.ghost, "h-7 px-2.5 text-[12px]")}>
-            시그널·본문에 적용
+            요약·본문에 적용
           </button>
         )}
         {!readOnly && (r.action === "why" || r.action === "numbers" || r.action === "next") && (
@@ -290,7 +290,7 @@ function TightenDiff({ draft, dek, blocks }: { draft: Draft; dek: string; blocks
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-line px-2.5 py-2">
-        <p className="kicker mb-1 text-fg-4">시그널</p>
+        <p className="kicker mb-1 text-fg-4">요약</p>
         <p className="text-[12.5px] leading-relaxed text-fg-2">{dek}</p>
       </div>
       <p className="tabular flex items-center gap-2 font-mono text-[11.5px] text-fg-3">
