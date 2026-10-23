@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getSiteFlags } from "@/data/public";
+import { Analytics } from "@/components/site/Analytics";
 import { DemoBanner } from "@/components/site/DemoBanner";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -34,6 +35,7 @@ export default async function SiteLayout({ children }: LayoutProps<"/">) {
         {children}
       </div>
       <Footer legal={flags.legal} />
+      <Analytics />
     </>
   );
 }

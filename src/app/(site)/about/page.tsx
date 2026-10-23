@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
 import { BLOCK_TITLE_KO, SECTION_LABEL_KO } from "@/lib/content/blocks";
+import { GA_ID } from "@/lib/analytics";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = { title: "회사 소개", description: `${SITE.name}가 기사를 만드는 방식을 소개합니다.` };
@@ -48,7 +49,9 @@ export default function AboutPage() {
         <DocList
           items={[
             "목록에서 기사를 열면 그 목록 순서대로 다음 기사로 넘어갈 수 있습니다. 모바일에서는 좌우로 밀고, PC에서는 J·K 키를 누르면 됩니다.",
-            "읽은 기사와 지난 방문 이후 올라온 기사는 이 기기에만 기록합니다. 로그인이나 추적용 쿠키는 쓰지 않습니다.",
+            GA_ID
+              ? "읽은 기사와 지난 방문 이후 올라온 기사는 이 기기에만 기록합니다. 로그인은 없고, 방문 통계는 Google 애널리틱스로 집계합니다."
+              : "읽은 기사와 지난 방문 이후 올라온 기사는 이 기기에만 기록합니다. 로그인이나 추적용 쿠키는 쓰지 않습니다.",
             "⌘K 또는 / 키로 기사를 검색할 수 있고, Aa 메뉴에서 밝은 화면과 글자 크기를 바꿀 수 있습니다.",
           ]}
         />

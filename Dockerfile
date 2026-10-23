@@ -16,6 +16,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG DATABASE_PUBLIC_URL
 ARG NEXT_PUBLIC_SITE_URL=https://newweb.media
+# Google Analytics 4 ID (G-…); unset = no analytics script and no analytics section in the privacy policy
+ARG NEXT_PUBLIC_GA_ID
 ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 ARG RAILWAY_GIT_COMMIT_SHA=local
 ARG SEED_ON_EMPTY=0
@@ -50,6 +52,7 @@ ARG SITE_EMAIL
 ARG SITE_REPORT_EMAIL
 ARG SITE_PUB_DATE
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_GA_ID=$NEXT_PUBLIC_GA_ID \
     NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     NEXT_DEPLOYMENT_ID=$RAILWAY_GIT_COMMIT_SHA
 # migrate → optional sample seed → next build. A script, not inline: BuildKit logs RUN lines

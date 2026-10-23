@@ -149,6 +149,7 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    | `INTERNAL_API_SECRET` | 임의의 긴 문자열 |
    | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | `openssl rand -base64 32` (배포 간 고정) |
    | `NEXT_PUBLIC_SITE_URL` | `https://newweb.media` |
+   | `NEXT_PUBLIC_GA_ID` (선택) | Google 애널리틱스 4 측정 ID(`G-…`). 독자 페이지에만 붙고 뉴스룸에는 붙지 않습니다. 설정하면 개인정보처리방침에 방문 통계 항목이 함께 나갑니다. 빌드 때 들어가므로 **다음 배포부터** 반영됩니다 |
    | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0`. 이미 쓰고 있는 DB(실제 기사·계정·가설이 있거나 샘플을 지운 적이 있음)에는 다시 넣지 않습니다. |
    | `LEGAL_*` (선택) | 법정 표기(제호·상호·등록번호·등록일·발행인·편집인·발행소·전화·사업자등록번호·청소년보호책임자·개인정보보호책임자·이메일·제보 이메일·창간). 빌드 때 페이지에 들어가므로 **다음 배포부터** 반영됩니다. 바로 반영하려면 `/admin/settings`에서 입력합니다. 예전 이름 `SITE_*`(`SITE_REG_NO`, `SITE_PUB_DATE` 등)도 읽습니다. 이름 목록은 `src/lib/site.ts`의 `LEGAL_FIELDS` |
    | `TRUSTED_PROXY_HOPS` | 기본 `1` (Railway 엣지). 앞에 CDN을 두면 `2` |

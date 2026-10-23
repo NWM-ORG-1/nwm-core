@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getSiteFlags } from "@/data/public";
+import { GA_ID } from "@/lib/analytics";
 import { AI_LABEL } from "@/lib/labels";
 import { PENDING } from "@/lib/site";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
@@ -102,7 +103,7 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
       );
     case "youth":
       return (
-        <DocPage kicker="YOUTH" title="청소년보호정책" lead="NWM은 청소년에게 유해한 정보를 게재하지 않으며, 청소년보호책임자를 지정해 관리합니다." updated="2026년 10월 (초안)">
+        <DocPage kicker="YOUTH" title="청소년보호정책" lead="뉴웹미디어는 청소년에게 유해한 정보를 게재하지 않으며, 청소년보호책임자를 지정해 관리합니다." updated="2026년 10월 (초안)">
           <DocSection title="운영 원칙">
             <DocList items={["음란·폭력·사행성 등 청소년 유해 정보를 게재하지 않습니다.", "광고는 청소년 유해 업종을 받지 않습니다.", "유해 정보 신고는 청소년보호책임자에게 접수되며 신속히 조치합니다."]} />
           </DocSection>
@@ -113,10 +114,50 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
       );
     case "privacy":
       return (
-        <DocPage kicker="PRIVACY" title="개인정보처리방침" lead="NWM은 회원 가입 없이 읽는 서비스로, 독자의 개인정보를 수집하지 않습니다." updated="2026년 10월 (초안)">
+        <DocPage
+          kicker="PRIVACY"
+          title="개인정보처리방침"
+          lead={
+            GA_ID
+              ? "뉴웹미디어는 회원 가입 없이 읽는 서비스입니다. 이름이나 연락처 같은 개인정보는 받지 않고, 방문 통계를 위해 Google 애널리틱스를 씁니다."
+              : "뉴웹미디어는 회원 가입 없이 읽는 서비스로, 독자의 개인정보를 수집하지 않습니다."
+          }
+          updated="2026년 10월 (초안)"
+        >
           <DocSection title="수집하지 않는 것">
-            <DocList items={["이름·이메일·전화번호 등 개인 식별 정보", "추적 쿠키 및 제3자 광고 추적 스크립트"]} />
+            <DocList
+              items={[
+                "이름·이메일·전화번호 등 개인 식별 정보",
+                GA_ID ? "광고 추적 스크립트와 맞춤형 광고용 정보" : "추적 쿠키 및 제3자 광고 추적 스크립트",
+              ]}
+            />
           </DocSection>
+          {GA_ID && (
+            <DocSection title="방문 통계 (Google 애널리틱스)">
+              <DocList
+                items={[
+                  "목적: 어떤 기사가 얼마나 읽히는지 파악해 서비스를 개선합니다.",
+                  "수집 항목: 방문한 페이지와 시각, 들어온 경로, 기기·브라우저 종류, 대략적인 지역, 쿠키(_ga)에 저장되는 무작위 식별자. Google 애널리틱스 4는 IP 주소를 기록하거나 저장하지 않습니다.",
+                  "광고 기능(Google 신호 데이터, 광고 개인 최적화)은 쓰지 않습니다.",
+                  "보관 기간: Google 애널리틱스의 데이터 보관 설정(최대 14개월)에 따라 보관한 뒤 삭제됩니다.",
+                  <>
+                    국외 이전: 위 정보는 방문할 때마다 인터넷을 통해 Google LLC(미국)로 전송되어 처리됩니다. Google의 처리 방식은{" "}
+                    <a className="text-ice hover:underline" href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">
+                      Google 개인정보처리방침
+                    </a>
+                    에서 볼 수 있습니다.
+                  </>,
+                  <>
+                    거부 방법: 브라우저 설정에서 쿠키를 차단하거나{" "}
+                    <a className="text-ice hover:underline" href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">
+                      Google 애널리틱스 차단 부가 기능
+                    </a>
+                    을 설치하면 수집되지 않습니다. 거부해도 기사를 읽는 데는 제한이 없습니다.
+                  </>,
+                ]}
+              />
+            </DocSection>
+          )}
           <DocSection title="기기에만 저장되는 것">
             <p>읽은 기사 기록, 마지막 방문 시각, 화면 설정(다크/라이트, 글자 크기)은 브라우저 저장소에만 보관되며 서버로 전송되지 않습니다. 브라우저 설정에서 언제든 삭제할 수 있습니다.</p>
           </DocSection>
@@ -142,12 +183,12 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
       );
     case "terms":
       return (
-        <DocPage kicker="TERMS" title="이용약관" lead="NWM의 기사와 데이터는 정보 제공 목적이며, 투자 권유가 아닙니다." updated="2026년 10월 (초안)">
+        <DocPage kicker="TERMS" title="이용약관" lead="뉴웹미디어의 기사와 데이터는 정보 제공 목적이며, 투자 권유가 아닙니다." updated="2026년 10월 (초안)">
           <DocSection title="투자 관련 고지">
             <p>시세·심리 지표와 기사는 투자 판단의 참고 자료일 뿐이며, 투자에 따른 결과의 책임은 이용자 본인에게 있습니다.</p>
           </DocSection>
           <DocSection title="저작권">
-            <p>NWM이 작성한 기사의 저작권은 NWM에 있습니다. 출처를 밝힌 인용은 환영하지만, 전문 복제와 AI 학습을 위한 무단 수집은 허용하지 않습니다.</p>
+            <p>뉴웹미디어가 작성한 기사의 저작권은 뉴웹미디어에 있습니다. 출처를 밝힌 인용은 환영하지만, 전문 복제와 AI 학습을 위한 무단 수집은 허용하지 않습니다.</p>
           </DocSection>
         </DocPage>
       );
