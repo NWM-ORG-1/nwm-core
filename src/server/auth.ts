@@ -6,6 +6,7 @@ import { cache } from "react";
 import { db } from "@/db/client";
 import { staff } from "@/db/schema";
 import { verifyBasicAuth } from "./credentials";
+import { requestOriginAllowed } from "./request-origin";
 
 export type StaffRow = typeof staff.$inferSelect;
 
@@ -28,8 +29,7 @@ export const requireStaff = cache(async (): Promise<StaffRow> => {
   if (!login) throw new AuthError();
 
   // CSRF defence in depth: browsers attach Basic credentials cross-site.
-  const site = h.get("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") throw new AuthError("허용되지 않은 요청 출처입니다.");
+  if (!requestOriginAllowed(h)) throw new AuthError("허용되지 않은 요청 출처입니다.");
 
   const existing = await db.query.staff.findFirst({ where: eq(staff.login, login) });
   if (existing) {
