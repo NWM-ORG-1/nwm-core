@@ -161,7 +161,11 @@ export async function getDeskAdmin(): Promise<DeskAdmin> {
       note: r.note ?? "",
       error: r.error,
     })),
-    today: { drafted, allowedNow: Math.min(settings.dailyDrafts, pacedAllowance(settings.dailyDrafts, now)), queued: Number(queued[0]?.n ?? 0) },
+    today: {
+      drafted,
+      allowedNow: settings.pacing === "spread" ? Math.min(settings.dailyDrafts, pacedAllowance(settings.dailyDrafts, now)) : settings.dailyDrafts,
+      queued: Number(queued[0]?.n ?? 0),
+    },
     outcomes30d: out30,
     spend: { deskUsd, allUsd, capUsd: draftGeneratorConfig().budgetUsd },
     worker: { alive: Boolean(beatAt && now.getTime() - Date.parse(beatAt) < 3 * 60_000), hasKey: Boolean(collector.env.ANTHROPIC_API_KEY?.trim()), lastBeat: beatAt },

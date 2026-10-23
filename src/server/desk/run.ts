@@ -12,7 +12,7 @@ import { aiMonthSpendUsd } from "../generator/ledger";
 import type { GenItem } from "../generator/types";
 import { loadDeskModel } from "./learn";
 import { activePlaybook } from "./playbook";
-import { explorePoints, finalScores, kstDayStart, lowRisk, pacedAllowance, pickStories, priorPoints, type Contender } from "./score";
+import { draftSlots, exploreAllowance, explorePoints, finalScores, kstDayStart, lowRisk, pickStories, priorPoints, type Contender } from "./score";
 import { loadDeskSettings, type DeskSettings } from "./settings";
 import { TRIAGE_BATCH, triageBatch, type TriageItem } from "./triage";
 
@@ -23,8 +23,8 @@ import { TRIAGE_BATCH, triageBatch, type TriageItem } from "./triage";
  *     adjustment and an exploration bonus give each story a final score
  *  2. stories worth drafting wait in a queue (a "draft" decision not yet
  *     drafted) for up to QUEUE_HOURS, losing a point an hour
- *  3. the best of the queue, within the slots the day allows by now, become
- *     drafts in 검토
+ *  3. the best of the queue become drafts in 검토 — at once, or spread over
+ *     the day (settings.pacing) — within the day's quota
  * Every call is kept in desk_decisions with its scores and reason, and each
  * feed item points at the decision that judged it.
  */
@@ -151,10 +151,18 @@ export async function deskSpendUsd(db: Pick<DB, "select">): Promise<number> {
   return Number(r?.usd ?? 0);
 }
 
-/** Desk drafts written since midnight KST. */
+/** Desk drafts written since midnight KST, and how many of them were exploration picks under the bar. */
 export async function draftedToday(db: Pick<DB, "select">, now: Date): Promise<number> {
-  const [r] = await db.select({ n: count() }).from(deskDecisions).where(gte(deskDecisions.draftedAt, kstDayStart(now)));
-  return Number(r?.n ?? 0);
+  return (await draftsToday(db, now)).all;
+}
+
+async function draftsToday(db: Pick<DB, "select">, now: Date): Promise<{ all: number; explored: number }> {
+  const [r] = await db
+    .select({ all: count(), explored: sql<number>`count(*) filter (where ${candidates.generator}->'desk'->>'explore' = 'true')::int` })
+    .from(deskDecisions)
+    .leftJoin(candidates, eq(candidates.id, deskDecisions.candidateId))
+    .where(gte(deskDecisions.draftedAt, kstDayStart(now)));
+  return { all: Number(r?.all ?? 0), explored: Number(r?.explored ?? 0) };
 }
 
 /**
@@ -319,7 +327,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
     waiting.push({ ...q, items, score: q.scores.final - Math.floor((now.getTime() - q.at.getTime()) / HOUR) });
   }
 
-  const done = await draftedToday(db, now);
+  const done = await draftsToday(db, now);
   const contenders: Contender[] = waiting.map((w) => ({
     key: w.id,
     final: w.score,
@@ -328,9 +336,9 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
     near: w.score >= settings.minScore - NEAR_POINTS,
   }));
   const picked = pickStories(contenders, {
-    paced: Math.max(0, pacedAllowance(settings.dailyDrafts, now) - done),
-    daily: Math.max(0, settings.dailyDrafts - done),
+    ...draftSlots(settings, now, done.all),
     exploreShare: settings.exploreShare,
+    exploreLeft: exploreAllowance(settings.dailyDrafts, settings.exploreShare, done.explored),
   }).map((k) => waiting.find((w) => w.id === k)!);
   // the same event can come in two batches: draft it once
   const chosen = picked.filter((w, i) => !picked.slice(0, i).some((p) => isDuplicate([w.angle, w.items[0].title], [p.angle, p.items[0].title])));
@@ -341,6 +349,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
       return;
     }
     const beat: Beat = w.beat ?? w.items[0].beatGuess ?? "tech";
+    const explore = w.score < settings.minScore;
     let gen: Awaited<ReturnType<typeof writeDraft>>;
     try {
       gen = await writeDraft(
@@ -369,7 +378,12 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
     });
     // " · " separates notes in the editor
     const plain = (s: string) => s.replace(/\s+·\s+/g, ", ");
-    const aiNote = [`AI 데스크 ${w.scores.final}점${w.topic ? ` (${plain(w.topic)})` : ""}: ${plain(w.reason)}`, risk.ok ? "저위험 기준 통과" : null, gen.aiNote]
+    const aiNote = [
+      `AI 데스크 ${w.scores.final}점${w.topic ? ` (${plain(w.topic)})` : ""}: ${plain(w.reason)}`,
+      explore ? `기준 점수(${settings.minScore}) 아래지만 반응을 아직 모르는 주제라 시험 삼아 골랐습니다` : null,
+      risk.ok ? "저위험 기준 통과" : null,
+      gen.aiNote,
+    ]
       .filter(Boolean)
       .join(" · ")
       .slice(0, 2000);
@@ -393,7 +407,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
             draft: gen.draft,
             checks,
             aiNote,
-            generator: { ...gen.meta, desk: { decisionId: w.id, score: w.scores.final, lowRisk: risk.ok, lowRiskWhy: risk.why } },
+            generator: { ...gen.meta, desk: { decisionId: w.id, score: w.scores.final, lowRisk: risk.ok, lowRiskWhy: risk.why, ...(explore ? { explore: true } : {}) } },
           })
           .returning({ id: candidates.id });
         await tx.insert(candidateItems).values(w.items.map((r, i) => ({ candidateId: cand.id, feedItemId: r.id, role: i === 0 ? "primary" : "supporting" })));
@@ -404,7 +418,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
           entityType: "candidate",
           entityId: cand.id,
           summary: `AI 데스크 초안 (${w.scores.final}점): ${gen.draft.title}`.slice(0, 300),
-          meta: { decisionId: w.id, topic: w.topic, lowRisk: risk.ok, items: w.itemIds },
+          meta: { decisionId: w.id, topic: w.topic, lowRisk: risk.ok, explore, items: w.itemIds },
         });
         return cand.id;
       })

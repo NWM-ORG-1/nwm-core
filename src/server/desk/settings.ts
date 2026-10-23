@@ -6,7 +6,8 @@ import { siteSettings } from "@/db/schema";
 /**
  * AI desk settings (뉴스룸 → AI 데스크). Every `cadenceMin` minutes the desk
  * reads new feed items, groups them into stories and judges each one; the best
- * become drafts in 검토, at most `dailyDrafts` a day, spread over the day. Desk
+ * become drafts in 검토, at most `dailyDrafts` a day — as soon as they clear the
+ * bar, or spread over 07–23 KST (`pacing`). Desk
  * calls stop for the month at `monthlyBudgetUsd`; the newsroom-wide
  * DRAFT_LLM_MONTHLY_USD cap applies on top.
  */
@@ -20,10 +21,13 @@ export const DESK_MODEL_KEY = "desk.model";
 export const DESK_CADENCES = [30, 60, 120, 240] as const;
 export const DESK_TRIAGE_MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"] as const;
 export const DESK_DRAFT_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5"] as const;
+/** immediate: draft as soon as a story clears the bar · spread: the day's drafts over 07–23 KST */
+export const DESK_PACINGS = ["immediate", "spread"] as const;
 
 export const deskSettingsSchema = z.object({
   enabled: z.boolean(),
   dailyDrafts: z.number().int().min(0).max(50),
+  pacing: z.enum(DESK_PACINGS),
   cadenceMin: z
     .number()
     .int()
@@ -31,7 +35,7 @@ export const deskSettingsSchema = z.object({
   monthlyBudgetUsd: z.number().min(0).max(2000),
   /** a story needs this final score (0–100) to be drafted */
   minScore: z.number().int().min(0).max(100),
-  /** share of the day's drafts kept for little-tried topics */
+  /** share of the day's drafts that may go to little-tried topics just under the bar */
   exploreShare: z.number().min(0).max(0.5),
   triageModel: z.enum(DESK_TRIAGE_MODELS),
   draftModel: z.enum(DESK_DRAFT_MODELS),
@@ -43,6 +47,7 @@ export type DeskSettings = z.infer<typeof deskSettingsSchema>;
 export const DESK_DEFAULTS: DeskSettings = {
   enabled: true,
   dailyDrafts: 10,
+  pacing: "immediate",
   cadenceMin: 60,
   monthlyBudgetUsd: 40,
   minScore: 60,

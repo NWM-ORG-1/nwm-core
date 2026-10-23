@@ -7,6 +7,8 @@ import { reflectPrompt } from "@/server/desk/playbook";
 import {
   BREAKING_SCORE,
   baseScore,
+  draftSlots,
+  exploreAllowance,
   explorePoints,
   finalScores,
   kstDayStart,
@@ -74,24 +76,42 @@ describe("the day's quota", () => {
     assert.equal(pacedAllowance(0, kst(12)), 0);
   });
 
-  const c = (key: string, final: number, o: Partial<Contender> = {}): Contender => ({ key, final, explore: 0, eligible: final >= 60, near: final >= 50, ...o });
-
-  it("picks the best eligible stories within the paced slots", () => {
-    const picks = pickStories([c("a", 70), c("b", 85), c("c", 65), c("d", 40)], { paced: 2, daily: 10, exploreShare: 0 });
-    assert.deepEqual(picks, ["b", "a"]);
+  it("drafts at once by default, or keeps to the paced allowance when spread", () => {
+    const night = kst(3);
+    assert.deepEqual(draftSlots({ dailyDrafts: 10, pacing: "immediate" }, night, 0), { paced: 10, daily: 10 });
+    assert.deepEqual(draftSlots({ dailyDrafts: 10, pacing: "spread" }, night, 0), { paced: 0, daily: 10 });
+    assert.deepEqual(draftSlots({ dailyDrafts: 10, pacing: "spread" }, kst(12), 3), { paced: 1, daily: 7 });
+    assert.deepEqual(draftSlots({ dailyDrafts: 10, pacing: "immediate" }, kst(12), 12), { paced: 0, daily: 0 });
   });
 
-  it("keeps a share of slots for little-tried topics near the bar", () => {
+  const c = (key: string, final: number, o: Partial<Contender> = {}): Contender => ({ key, final, explore: 0, eligible: final >= 60, near: final >= 50, ...o });
+  const opts = (o: Partial<Parameters<typeof pickStories>[1]>) => ({ paced: 10, daily: 10, exploreShare: 0, exploreLeft: 0, ...o });
+
+  it("picks the best eligible stories within the slots", () => {
+    assert.deepEqual(pickStories([c("a", 70), c("b", 85), c("c", 65), c("d", 40)], opts({ paced: 2 })), ["b", "a"]);
+    assert.deepEqual(pickStories([c("a", 70), c("b", 85), c("c", 65), c("d", 40)], opts({})), ["b", "a", "c"]);
+  });
+
+  it("keeps a share of slots for little-tried topics just under the bar", () => {
     const list = [c("a", 80), c("b", 78), c("c", 76), c("d", 74), c("x", 55, { explore: 6 })];
-    assert.deepEqual(pickStories(list, { paced: 5, daily: 10, exploreShare: 0.2 }), ["a", "b", "c", "d", "x"]);
-    assert.deepEqual(pickStories(list, { paced: 4, daily: 10, exploreShare: 0.25 }), ["a", "b", "c", "x"]);
+    assert.deepEqual(pickStories(list, opts({ paced: 5, exploreShare: 0.2, exploreLeft: 2 })), ["a", "b", "c", "d", "x"]);
+    assert.deepEqual(pickStories(list, opts({ paced: 4, exploreShare: 0.25, exploreLeft: 2 })), ["a", "b", "c", "x"]);
+    assert.deepEqual(pickStories(list, opts({ paced: 4, exploreShare: 0.25, exploreLeft: 0 })), ["a", "b", "c", "d"], "the day's exploration is used up");
+  });
+
+  it("never lets stories under the bar fill free slots beyond the exploration share", () => {
+    const under = [c("x", 58, { explore: 6 }), c("y", 56, { explore: 6 }), c("z", 52, { explore: 4 }), c("w", 55)];
+    // drafting at once: ten free slots, but only the day's share (2 of 10) may go under the bar
+    assert.deepEqual(pickStories(under, opts({ exploreShare: 0.2, exploreLeft: exploreAllowance(10, 0.2, 0) })), ["x", "y"]);
+    assert.deepEqual(pickStories(under, opts({ exploreShare: 0.2, exploreLeft: exploreAllowance(10, 0.2, 2) })), []);
+    assert.equal(exploreAllowance(10, 0, 0), 0);
   });
 
   it("lets breaking-strength stories run ahead of pacing, never past the day", () => {
     const list = [c("a", BREAKING_SCORE + 2), c("b", 70), c("c", BREAKING_SCORE)];
-    assert.deepEqual(pickStories(list, { paced: 0, daily: 10, exploreShare: 0.2 }), ["a", "c"]);
-    assert.deepEqual(pickStories(list, { paced: 0, daily: 1, exploreShare: 0.2 }), ["a"]);
-    assert.deepEqual(pickStories(list, { paced: 3, daily: 0, exploreShare: 0 }), []);
+    assert.deepEqual(pickStories(list, opts({ paced: 0, exploreShare: 0.2, exploreLeft: 2 })), ["a", "c"]);
+    assert.deepEqual(pickStories(list, opts({ paced: 0, daily: 1, exploreShare: 0.2 })), ["a"]);
+    assert.deepEqual(pickStories(list, opts({ paced: 3, daily: 0 })), []);
   });
 });
 
@@ -254,6 +274,8 @@ describe("desk settings", () => {
     assert.equal(s.cadenceMin, DESK_DEFAULTS.cadenceMin);
     assert.equal(s.minScore, DESK_DEFAULTS.minScore);
     assert.equal(s.triageModel, "claude-sonnet-5-5");
+    assert.equal(s.pacing, "immediate", "settings saved before pacing existed draft at once");
+    assert.equal(mergeDeskSettings({ pacing: "spread" }).pacing, "spread");
     assert.deepEqual(mergeDeskSettings(null), DESK_DEFAULTS);
   });
 });

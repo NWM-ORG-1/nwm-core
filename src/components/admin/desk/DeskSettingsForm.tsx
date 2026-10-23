@@ -71,9 +71,19 @@ export function DeskSettingsForm({
       <div className={row}>
         <label htmlFor="desk-daily" className={label}>
           하루 초안 수
-          <span className={hint}>07–23시에 나눠 씁니다. 속보급(88점 이상)은 먼저 쓸 수 있습니다.</span>
+          <span className={hint}>하루(KST)에 쓰는 초안의 최대 개수. 다 차면 남은 소식은 대기했다가 자정 뒤에 다시 겨룹니다.</span>
         </label>
         <input id="desk-daily" type="number" min={0} max={50} value={v.dailyDrafts} onChange={(e) => set("dailyDrafts", Math.round(Number(e.target.value)))} className={cx(field, "w-20")} />
+      </div>
+      <div className={row}>
+        <label htmlFor="desk-pacing" className={label}>
+          초안 쓰는 때
+          <span className={hint}>바로: 기준을 넘는 소식이 나오면 곧바로 씁니다(하루 분량이 일찍 찰 수 있음). 나눠서: 07–23시에 고르게 쓰고 속보급(88점 이상)만 먼저 씁니다.</span>
+        </label>
+        <select id="desk-pacing" value={v.pacing} onChange={(e) => set("pacing", e.target.value as DeskSettings["pacing"])} className={field}>
+          <option value="immediate">바로 쓰기</option>
+          <option value="spread">하루에 나눠 쓰기</option>
+        </select>
       </div>
       <div className={row}>
         <label htmlFor="desk-cadence" className={label}>
@@ -98,7 +108,7 @@ export function DeskSettingsForm({
       <div className={row}>
         <label htmlFor="desk-explore" className={label}>
           탐색 몫
-          <span className={hint}>아직 반응을 모르는 주제에 남겨 두는 비율. 초반에 기준이 굳지 않게 합니다.</span>
+          <span className={hint}>하루 초안 중 이 비율까지는 기준보다 10점 안쪽으로 낮아도 처음 보는 주제를 시험 삼아 씁니다. 초반에 기준이 굳지 않게 합니다.</span>
         </label>
         <select id="desk-explore" value={v.exploreShare} onChange={(e) => set("exploreShare", Number(e.target.value))} className={field}>
           {EXPLORE.map((o) => (

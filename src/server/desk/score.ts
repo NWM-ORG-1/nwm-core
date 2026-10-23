@@ -83,30 +83,44 @@ export interface Contender {
   explore: number;
   /** judged worth drafting and at or above the bar */
   eligible: boolean;
-  /** judged worth drafting, a little under the bar (an exploration pick) */
+  /** judged worth drafting and at most 10 points under the bar (a possible exploration pick) */
   near: boolean;
 }
 
 /**
- * Stories to draft now: the best by final score, with a share of the slots for
- * little-tried topics near the bar; breaking-strength stories may use the rest
- * of the day's quota early.
+ * Slots for drafting now. `immediate`: anything over the bar until the day's
+ * quota is used. `spread`: the paced allowance (breaking-strength stories may
+ * still run ahead, see pickStories).
  */
-export function pickStories(c: Contender[], o: { paced: number; daily: number; exploreShare: number }): string[] {
+export function draftSlots(s: { dailyDrafts: number; pacing: "immediate" | "spread" }, now: Date, done: number): { paced: number; daily: number } {
+  const daily = Math.max(0, s.dailyDrafts - done);
+  return { daily, paced: s.pacing === "spread" ? Math.max(0, pacedAllowance(s.dailyDrafts, now) - done) : daily };
+}
+
+/** Exploration picks (under the bar) the day allows: its share of the daily quota. */
+export function exploreAllowance(dailyDrafts: number, exploreShare: number, exploredToday: number): number {
+  return Math.max(0, Math.round(dailyDrafts * exploreShare) - exploredToday);
+}
+
+/**
+ * Stories to draft now: the best by final score, with a few slots for
+ * little-tried topics just under the bar — never more than the day's
+ * exploration share (`exploreLeft`), so the bar itself does not move.
+ * Breaking-strength stories may use the rest of the day's quota early.
+ */
+export function pickStories(c: Contender[], o: { paced: number; daily: number; exploreShare: number; exploreLeft: number }): string[] {
   const picks: string[] = [];
   const has = (k: string) => picks.includes(k);
   const best = c.filter((x) => x.eligible).sort((a, b) => b.final - a.final);
+  const under = c.filter((x) => !x.eligible && x.near && x.explore > 0).sort((a, b) => b.explore + b.final - (a.explore + a.final));
   const slots = Math.max(0, Math.min(o.paced, o.daily));
-  const exploreSlots = slots >= 2 ? Math.round(slots * o.exploreShare) : 0;
+  const reserve = slots >= 2 ? Math.min(Math.round(slots * o.exploreShare), o.exploreLeft, under.length) : 0;
 
   for (const x of best) {
-    if (picks.length >= slots - exploreSlots) break;
+    if (picks.length >= slots - reserve) break;
     picks.push(x.key);
   }
-  const explorers = c
-    .filter((x) => (x.eligible || x.near) && x.explore > 0 && !has(x.key))
-    .sort((a, b) => b.explore + b.final - (a.explore + a.final));
-  for (const x of explorers) {
+  for (const x of under.slice(0, Math.max(0, reserve))) {
     if (picks.length >= slots) break;
     picks.push(x.key);
   }

@@ -70,7 +70,13 @@ async function Body() {
           <Stat
             label="오늘 초안"
             value={`${d.today.drafted} / ${s.dailyDrafts}`}
-            sub={d.today.allowedNow ? `지금까지 쓸 수 있는 몫 ${d.today.allowedNow}건` : "07시부터 나눠 씁니다 (속보급은 먼저)"}
+            sub={
+              s.pacing === "immediate"
+                ? "기준을 넘으면 바로 씁니다"
+                : d.today.allowedNow
+                  ? `지금까지 쓸 수 있는 몫 ${d.today.allowedNow}건`
+                  : "07시부터 나눠 씁니다 (속보급은 먼저)"
+            }
           />
           <Stat label="대기" value={d.today.queued} sub={`${QUEUE_HOURS}시간 안에 차례가 오면 씁니다`} />
           <Stat label="30일 결과" value={`${d.outcomes30d.published} 발행`} sub={`반려 ${d.outcomes30d.rejected} · 검토 중 ${d.outcomes30d.review}`} />

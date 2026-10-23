@@ -82,8 +82,8 @@ export interface GeneratorMeta {
   /** model output: model id, tokens and cost of the call that wrote the draft */
   model?: string;
   usage?: { inputTokens: number; outputTokens: number; costUsd: number };
-  /** drafted by the AI desk: its decision, score (0–100) and whether it met the low-risk rules */
-  desk?: { decisionId: string; score: number; lowRisk: boolean; lowRiskWhy: string[] };
+  /** drafted by the AI desk: its decision, score (0–100), whether it met the low-risk rules, and whether it was an exploration pick under the bar */
+  desk?: { decisionId: string; score: number; lowRisk: boolean; lowRiskWhy: string[]; explore?: boolean };
 }
 
 /** AI desk scores for one story, 0–100 (risk: higher = riskier). */
