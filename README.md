@@ -136,6 +136,7 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
 ### 웹 서비스
 
 1. Railway 프로젝트에 **Postgres**를 추가하고, 이 GitHub 저장소를 **서비스로 연결**합니다. 루트의 `Dockerfile`로 빌드됩니다.
+   - Railway의 Postgres 템플릿은 외부 접속 주소를 만들지 않습니다. 빌드가 DB에 닿도록 Postgres 서비스 → Settings → Networking에서 **TCP Proxy**(포트 5432)를 켜고, Postgres 서비스 변수에 `DATABASE_PUBLIC_URL` = `postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}/${{PGDATABASE}}`를 추가합니다.
 2. 리전은 **Singapore**를 권장합니다 (한국과 가장 가까움). Postgres도 같은 리전에 둡니다.
 3. Settings에서 **Healthcheck Path**를 `/api/health`로 둡니다.
 4. 서비스 변수를 설정합니다.
@@ -151,12 +152,14 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0`. 이미 쓰고 있는 DB(실제 기사·계정·가설이 있거나 샘플을 지운 적이 있음)에는 다시 넣지 않습니다. |
    | `LEGAL_*` (선택) | 법정 표기(제호·상호·등록번호·등록일·발행인·편집인·발행소·전화·사업자등록번호·청소년보호책임자·개인정보보호책임자·이메일·제보 이메일·창간). 빌드 때 페이지에 들어가므로 **다음 배포부터** 반영됩니다. 바로 반영하려면 `/admin/settings`에서 입력합니다. 예전 이름 `SITE_*`(`SITE_REG_NO`, `SITE_PUB_DATE` 등)도 읽습니다. 이름 목록은 `src/lib/site.ts`의 `LEGAL_FIELDS` |
    | `TRUSTED_PROXY_HOPS` | 기본 `1` (Railway 엣지). 앞에 CDN을 두면 `2` |
+   | `PORT` | `3000`. 이미지가 듣는 포트입니다. 도메인의 대상 포트(Target Port)도 3000으로 맞춥니다 |
    | `DRAFT_GENERATOR` | `claude`면 AI 초안·어시스트에 Claude를 씁니다. 기본 `mock` |
    | `ANTHROPIC_API_KEY` | AI 초안용. 워커와 같은 키라면 Shared Variable로 두고 `${{shared.ANTHROPIC_API_KEY}}`로 참조합니다 |
    | `DRAFT_MODEL` · `DRAFT_ASSIST_MODEL` · `DRAFT_EFFORT` (선택) | 초안 모델(기본 `claude-opus-5-5`), 어시스트 모델(기본: 초안 모델), effort(기본: 모델 기본값) |
    | `DRAFT_LLM_MONTHLY_USD` | 초안·어시스트 합산 월 한도, 달러 (기본 50) |
 
-5. 빌드 순서 (Dockerfile): `db:migrate`(advisory lock) → (선택) `db:seed --if-empty` → `next build`.
+5. 빌드 순서 (Dockerfile → `scripts/docker-build.sh`): `db:migrate`(advisory lock) → (선택) `db:seed --if-empty` → `next build`.
+   - DB 주소에는 비밀번호가 들어 있어서 `RUN` 줄에 직접 쓰지 않고 스크립트가 환경변수로 읽습니다. BuildKit은 `RUN` 줄을 빌드 인자 값으로 채워 로그에 찍습니다.
    - 빌드가 DB에서 데이터를 읽어 페이지를 미리 만듭니다.
    - 마이그레이션은 **추가형(expand/contract)만** 허용합니다.
 6. 레플리카는 **1개**로 운영합니다. 다중 인스턴스는 Redis cache handler를 도입한 뒤에 늘립니다.
@@ -176,7 +179,8 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    |---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
    | `INTERNAL_API_SECRET` | 웹 서비스와 같은 값: `${{<웹 서비스 이름>.INTERNAL_API_SECRET}}` |
-   | `NEXT_PUBLIC_SITE_URL` | `https://newweb.media`. 캐시 갱신 요청을 이 주소로 보냅니다 (`REVALIDATE_URL`로 따로 지정 가능) |
+   | `NEXT_PUBLIC_SITE_URL` | `https://newweb.media` |
+   | `REVALIDATE_URL` | `http://${{<웹 서비스 이름>.RAILWAY_PRIVATE_DOMAIN}}:${{<웹 서비스 이름>.PORT}}`. 캐시 갱신 요청을 사설망으로 보내므로 도메인 연결 전에도 동작합니다. 비우면 `NEXT_PUBLIC_SITE_URL`로 보냅니다 |
    | `FEED_CONTACT_EMAIL` | 수집기 User-Agent에 붙는 연락처. 사이트 운영자가 문의할 수 있게 넣어 두세요 |
    | 데이터 키 | 있는 것만 넣습니다: `DART_API_KEY`, `ECOS_API_KEY`, `KOSIS_API_KEY`, `KOREAEXIM_API_KEY`, `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET`, `X_BEARER_TOKEN`, `TELEGRAM_BOT_TOKEN` |
    | `ANTHROPIC_API_KEY` | 센티먼트용 게시물 분류. 없으면 사전만 씁니다 |
