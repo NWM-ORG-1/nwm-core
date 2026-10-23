@@ -7,7 +7,7 @@ test.describe("public site", () => {
     await expect(page.getByRole("heading", { name: /지금 알아야 할 \d+가지/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "라이브" })).toBeVisible();
     const footer = page.locator("footer");
-    for (const label of ["제호", "등록번호", "발행인", "편집인", "청소년보호책임자"]) {
+    for (const label of ["제호", "상호", "등록번호", "발행인", "편집인", "사업자등록번호", "청소년보호책임자", "개인정보보호책임자"]) {
       await expect(footer.getByText(label, { exact: true })).toBeVisible();
     }
     // ticker values arrive from /api/pulse

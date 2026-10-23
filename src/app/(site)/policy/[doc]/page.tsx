@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { getSiteFlags } from "@/data/public";
 import { AI_LABEL } from "@/lib/labels";
-import { SITE } from "@/lib/site";
+import { PENDING } from "@/lib/site";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
 
 const DOCS = {
@@ -35,6 +36,7 @@ export default function PolicyPage({ params }: PageProps<"/policy/[doc]">) {
 async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
   const { doc } = await params;
   if (!(doc in DOCS)) notFound();
+  const { legal } = await getSiteFlags();
   switch (doc as Doc) {
     case "ai":
       return (
@@ -87,7 +89,7 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
           <DocSection title="신청 방법">
             <DocList
               items={[
-                <>이메일: <a className="text-ice hover:underline" href={`mailto:${SITE.email}`}>{SITE.email}</a> (기사 주소, 정정을 원하는 내용, 근거, 연락처)</>,
+                <>이메일: <a className="text-ice hover:underline" href={`mailto:${legal.reportEmail}`}>{legal.reportEmail}</a> (기사 주소, 정정을 원하는 내용, 근거, 연락처)</>,
                 "접수 후 3일 이내에 회신하고, 정정이 필요한 경우 지체 없이(늦어도 7일 이내) 본문을 바로잡고 정정 사실을 공개합니다.",
                 "정정 보도와 별도로 반론 보도, 추후 보도를 청구할 수 있습니다. 언론중재위원회를 통한 조정 신청도 가능합니다.",
               ]}
@@ -120,6 +122,21 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
           </DocSection>
           <DocSection title="서버에 남는 것">
             <p>기사별 조회·완독·다음 기사 이동 횟수를 개인을 식별할 수 없는 집계로만 기록합니다. 서비스 보안을 위한 접속 기록은 법령이 정한 기간 동안 보관 후 파기합니다.</p>
+          </DocSection>
+          <DocSection title="개인정보 보호책임자">
+            {legal.privacyOfficer === PENDING ? (
+              <p>보호책임자는 인터넷신문 등록 후 이 페이지와 사이트 하단 발행 정보에 공개합니다.</p>
+            ) : (
+              <DocList
+                items={[
+                  <>성명: {legal.privacyOfficer}</>,
+                  <>
+                    연락처: <a className="text-ice hover:underline" href={`mailto:${legal.email}`}>{legal.email}</a>
+                    {legal.phone !== PENDING ? ` · ${legal.phone}` : ""}
+                  </>,
+                ]}
+              />
+            )}
           </DocSection>
         </DocPage>
       );

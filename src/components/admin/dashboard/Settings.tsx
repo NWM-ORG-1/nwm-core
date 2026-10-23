@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { getMyProfile, getSettingsAdmin } from "@/data/admin";
 import { getOpsChecklist, type CheckState } from "@/data/admin-dashboard";
 import { Icon } from "@/components/ui/Icon";
-import { LEGAL_DEFAULTS, LEGAL_FIELDS, PENDING } from "@/lib/site";
+import { LEGAL_DEFAULTS, LEGAL_FIELDS, legalEnvName, PENDING } from "@/lib/site";
 import { cx } from "../ui";
 import { AiPanel } from "./AiPanel";
 import { LegalForm, type LegalFieldView } from "./LegalForm";
@@ -13,7 +13,7 @@ export async function SettingsBody() {
   const fields: LegalFieldView[] = LEGAL_FIELDS.map((f) => ({
     key: f.key,
     label: f.label,
-    env: f.env,
+    env: legalEnvName(f) ?? f.env,
     stored: typeof settings.stored[f.key] === "string" ? (settings.stored[f.key] as string) : "",
     envValue: settings.env[f.key] ?? null,
     fallback: LEGAL_DEFAULTS[f.key],

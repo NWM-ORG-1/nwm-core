@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useState, type FormEvent } from "react";
-import { PENDING, SITE } from "@/lib/site";
+import { foundedYear, LEGAL_CONTACT_KEYS, PENDING, SITE, type Legal } from "@/lib/site";
 import { saveLegal } from "@/server/actions/settings";
 import { ActionMessage } from "../client";
 import { Badge, btn, cx } from "../ui";
@@ -30,6 +30,7 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
   const sourceOf = (f: LegalFieldView) => (f.envValue ? "env" : (values[f.key] ?? "").trim() ? "db" : "default");
   const pendingCount = fields.filter((f) => effective(f) === PENDING).length;
   const emailField = fields.find((f) => f.key === "email");
+  const reportField = fields.find((f) => f.key === "reportEmail");
   const foundedField = fields.find((f) => f.key === "foundedAt");
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
@@ -144,7 +145,7 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
           <p className="kicker mb-3 text-fg-4">발행 정보</p>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-1.5 text-[12.5px] leading-relaxed">
             {fields
-              .filter((f) => f.key !== "email")
+              .filter((f) => !LEGAL_CONTACT_KEYS.has(f.key as keyof Legal))
               .map((f) => {
                 const v = effective(f);
                 return (
@@ -160,8 +161,9 @@ export function LegalForm({ fields }: { fields: LegalFieldView[] }) {
           </dl>
           <p className="mt-4 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-3 text-[12px] text-fg-4">
             <span className="break-all text-fg-3">{emailField ? effective(emailField) : SITE.email}</span>
+            {reportField && emailField && effective(reportField) !== effective(emailField) && <span className="break-all text-fg-3">제보·정정 {effective(reportField)}</span>}
             <span>
-              © {foundedField ? effective(foundedField) : ""} {SITE.nameEn}
+              © {foundedField ? foundedYear(effective(foundedField)) : ""} {SITE.nameEn}
             </span>
           </p>
         </div>

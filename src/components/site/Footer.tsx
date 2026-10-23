@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BEATS, BEAT_ORDER } from "@/lib/beats";
-import { LEGAL_FIELDS, PENDING, SITE, type Legal } from "@/lib/site";
+import { foundedYear, LEGAL_CONTACT_KEYS, LEGAL_FIELDS, PENDING, SITE, type Legal } from "@/lib/site";
 import { Icon } from "@/components/ui/Icon";
 import { Wordmark } from "@/components/ui/Wordmark";
 
@@ -22,6 +22,14 @@ export function Footer({ legal }: { legal: Legal }) {
               {legal.email}
             </a>
           </div>
+          {legal.reportEmail !== legal.email && (
+            <p className="mt-2 text-[13px] text-fg-3">
+              제보·정정{" "}
+              <a href={`mailto:${legal.reportEmail}`} className="hover:text-fg">
+                {legal.reportEmail}
+              </a>
+            </p>
+          )}
         </div>
 
         <nav aria-label="하단 분야 메뉴">
@@ -58,7 +66,7 @@ export function Footer({ legal }: { legal: Legal }) {
         <div>
           <p className="kicker mb-3 text-fg-4">발행 정보</p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px] leading-relaxed">
-            {LEGAL_FIELDS.filter((f) => f.key !== "email").map((f) => (
+            {LEGAL_FIELDS.filter((f) => !LEGAL_CONTACT_KEYS.has(f.key)).map((f) => (
               <div key={f.key} className="contents">
                 <dt className="text-fg-4">{f.label}</dt>
                 <dd className={legal[f.key] === PENDING ? "text-fg-4" : "text-fg-3"}>{legal[f.key]}</dd>
@@ -69,7 +77,7 @@ export function Footer({ legal }: { legal: Legal }) {
       </div>
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-[1320px] flex-col gap-2 px-4 py-5 text-[12px] text-fg-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {legal.foundedAt} {SITE.nameEn}. 모든 기사에는 AI 활용 여부와 책임 편집자를 표시합니다.</p>
+          <p>© {foundedYear(legal.foundedAt)} {SITE.nameEn}. 모든 기사에는 AI 활용 여부와 책임 편집자를 표시합니다.</p>
           <p className="font-mono tracking-wider">{SITE.domain}</p>
         </div>
       </div>
