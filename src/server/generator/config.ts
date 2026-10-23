@@ -27,7 +27,8 @@ export interface DraftGeneratorConfig {
 export function draftGeneratorConfig(env: Record<string, string | undefined> = process.env): DraftGeneratorConfig {
   const model = env.DRAFT_MODEL?.trim() || DEFAULT_DRAFT_MODEL;
   const assistModel = env.DRAFT_ASSIST_MODEL?.trim() || model;
-  const budget = Number(env.DRAFT_LLM_MONTHLY_USD ?? 50);
+  // an empty variable (e.g. a reference to an unset one) means the default, not $0
+  const budget = Number(env.DRAFT_LLM_MONTHLY_USD?.trim() || 50);
   return {
     kind: env.DRAFT_GENERATOR?.trim() === "claude" ? "claude" : "mock",
     model,

@@ -14,6 +14,7 @@ function navItems(shell: Awaited<ReturnType<typeof getAdminShell>>): AdminNavIte
     { href: "/admin", label: "대시보드" },
     { href: "/admin/feeds", label: "피드 인박스", count: shell.counts.inboxNew },
     { href: "/admin/candidates", label: "후보 보드", count: shell.counts.review },
+    { href: "/admin/desk", label: "AI 데스크" },
     { href: "/admin/articles", label: "발행 기사", count: shell.counts.openRequests, alert: shell.counts.openRequests > 0 },
     { href: "/admin/stories", label: "스토리" },
     { href: "/admin/auto", label: "자동 기사" },

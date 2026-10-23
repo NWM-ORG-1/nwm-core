@@ -9,7 +9,7 @@ import { clockKST, dateKST } from "@/lib/format";
 import { moveCandidate, rejectCandidate } from "@/server/actions/candidates";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
-import { cx, ExperimentDot, ModeBadge } from "@/components/admin/ui";
+import { Badge, cx, ExperimentDot, ModeBadge } from "@/components/admin/ui";
 import { ReasonDialog } from "./ReasonDialog";
 import { BOARD_COLUMNS, MODE_CODE, type BoardCard, type MoveTarget } from "./shared";
 import { Ago } from "./time";
@@ -443,6 +443,12 @@ function CandidateCard({
       {/* row: checks · items · experiment */}
       {!compact && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-fg-3">
+          {c.desk && (
+            <Badge tone={c.desk.lowRisk ? "good" : "ice"} title={`AI 데스크가 고른 초안 · ${c.desk.score}점 · ${c.desk.lowRiskWhy.join(" · ")}`}>
+              AI {c.desk.score}
+              {c.desk.lowRisk ? " · 저위험" : ""}
+            </Badge>
+          )}
           {c.checks.total === 0 ? (
             <span className="text-fg-4">체크 전</span>
           ) : (

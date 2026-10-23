@@ -73,8 +73,11 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
               오류가 확인되면 본문을 바로잡고, 무엇을 왜 고쳤는지 기사 하단과 <Link href="/corrections" className="text-ice hover:underline">정정 기록</Link>에 공개합니다.
             </p>
           </DocSection>
-          <DocSection title="5. 독자 데이터를 학습에 쓰지 않습니다">
-            <p>추천과 읽음 기록은 독자의 기기 안에서만 계산·저장됩니다. 서버에는 개인을 식별하지 않는 기사별 조회·완독 집계만 남습니다.</p>
+          <DocSection title="5. 개인 독자 데이터는 쓰지 않습니다">
+            <p>
+              추천과 읽음 기록은 독자의 기기 안에서만 계산·저장됩니다. 서버에는 개인을 식별하지 않는 기사별 조회·완독·유입 경로 집계만 남고, 이 집계는 어떤 소식을 다룰지 정하는 데
+              참고합니다.
+            </p>
           </DocSection>
           <DocSection title="6. 투자심리지수의 AI 분류">
             <p>
@@ -165,7 +168,10 @@ async function Policy({ params }: Pick<PageProps<"/policy/[doc]">, "params">) {
             <p>읽은 기사 기록, 마지막 방문 시각, 화면 설정(다크/라이트, 글자 크기)은 브라우저 저장소에만 보관되며 서버로 전송되지 않습니다. 브라우저 설정에서 언제든 삭제할 수 있습니다.</p>
           </DocSection>
           <DocSection title="서버에 남는 것">
-            <p>기사별 조회·완독·다음 기사 이동 횟수를 개인을 식별할 수 없는 집계로만 기록합니다. 서비스 보안을 위한 접속 기록은 법령이 정한 기간 동안 보관 후 파기합니다.</p>
+            <p>
+              기사별 조회·완독·다음 기사 이동 횟수와 유입 경로 분류(검색, SNS, 직접 방문 등)를 개인을 식별할 수 없는 집계로만 기록합니다. 들어온 페이지의 주소는 저장하지 않습니다. 서비스
+              보안을 위한 접속 기록은 법령이 정한 기간 동안 보관 후 파기합니다.
+            </p>
           </DocSection>
           <DocSection title="개인정보 보호책임자">
             {legal.privacyOfficer === PENDING ? (

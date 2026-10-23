@@ -18,6 +18,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { Block, Draft, SentimentSnapshot, SourceRef } from "@/lib/content/blocks";
 
@@ -46,6 +47,8 @@ export const staffRoleEnum = pgEnum("staff_role", ["admin", "editor"]);
 export const storyStatusEnum = pgEnum("story_status", ["developing", "settled"]);
 export const correctionKindEnum = pgEnum("correction_kind", ["correction", "clarification", "update"]);
 export const correctionRequestStatusEnum = pgEnum("correction_request_status", ["open", "accepted", "rejected"]);
+/** AI desk triage: write a draft now · newsworthy but needs a primary source first · not worth an article */
+export const deskDecisionEnum = pgEnum("desk_decision", ["draft", "hold", "skip"]);
 
 export type Beat = (typeof beatEnum.enumValues)[number];
 export type AiInvolvement = (typeof aiInvolvementEnum.enumValues)[number];
@@ -54,6 +57,7 @@ export type CandidateMode = (typeof candidateModeEnum.enumValues)[number];
 export type SourceKind = (typeof sourceKindEnum.enumValues)[number];
 export type SourceStatus = (typeof sourceStatusEnum.enumValues)[number];
 export type FeedItemStatus = (typeof feedItemStatusEnum.enumValues)[number];
+export type DeskDecision = (typeof deskDecisionEnum.enumValues)[number];
 
 /* ─────────────────────────── shared JSON types ─────────────────────────── */
 
@@ -78,6 +82,23 @@ export interface GeneratorMeta {
   /** model output: model id, tokens and cost of the call that wrote the draft */
   model?: string;
   usage?: { inputTokens: number; outputTokens: number; costUsd: number };
+  /** drafted by the AI desk: its decision, score (0–100) and whether it met the low-risk rules */
+  desk?: { decisionId: string; score: number; lowRisk: boolean; lowRiskWhy: string[] };
+}
+
+/** AI desk scores for one story, 0–100 (risk: higher = riskier). */
+export interface DeskScores {
+  news: number;
+  interest: number;
+  evidence: number;
+  risk: number;
+  /** model judgement before learning */
+  base: number;
+  /** learned adjustment from reader response and editor decisions */
+  prior: number;
+  /** exploration bonus for little-tried topics */
+  explore: number;
+  final: number;
 }
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -190,6 +211,8 @@ export const feedItems = pgTable(
     fetchedAt: ts("fetched_at").notNull().defaultNow(),
     expiresAt: ts("expires_at"),
     isSample: boolean("is_sample").notNull().default(false),
+    /** the AI desk's call on this item; null = not judged yet */
+    deskDecisionId: uuid("desk_decision_id").references((): AnyPgColumn => deskDecisions.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("feed_items_source_external_uq").on(t.sourceId, t.externalId),
@@ -384,6 +407,12 @@ export const articleStatsDaily = pgTable(
     reads: integer("reads").notNull().default(0),
     nexts: integer("nexts").notNull().default(0),
     dwellMs: bigint("dwell_ms", { mode: "number" }).notNull().default(0),
+    /** views by where the reader came from (referrer category, no personal data) */
+    viewsSearch: integer("views_search").notNull().default(0),
+    viewsSocial: integer("views_social").notNull().default(0),
+    viewsDirect: integer("views_direct").notNull().default(0),
+    viewsInternal: integer("views_internal").notNull().default(0),
+    viewsOther: integer("views_other").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.articleId, t.day] }), index("article_stats_day_idx").on(t.day)],
 );
@@ -526,6 +555,61 @@ export const aiUsage = pgTable(
   },
   (t) => [index("ai_usage_at_idx").on(t.at.desc())],
 );
+
+/* ───────────────────────────── AI desk ───────────────────────────── */
+
+/** One pass of the AI desk over new feed items. */
+export const deskRuns = pgTable(
+  "desk_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    startedAt: ts("started_at").notNull().defaultNow(),
+    finishedAt: ts("finished_at"),
+    trigger: text("trigger").notNull().default("schedule"), // schedule | manual
+    itemsSeen: integer("items_seen").notNull().default(0),
+    stories: integer("stories").notNull().default(0),
+    drafted: integer("drafted").notNull().default(0),
+    costUsd: doublePrecision("cost_usd").notNull().default(0),
+    note: text("note"),
+    error: text("error"),
+  },
+  (t) => [index("desk_runs_started_idx").on(t.startedAt.desc())],
+);
+
+/** The desk's call on one story (a group of feed items): draft, hold or skip, with scores and reason. */
+export const deskDecisions = pgTable(
+  "desk_decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").references(() => deskRuns.id, { onDelete: "set null" }),
+    at: ts("at").notNull().defaultNow(),
+    itemIds: uuid("item_ids").array().notNull(),
+    beat: beatEnum("beat"),
+    /** short reusable topic label, the unit the desk learns on ("AI 모델 공개", "반도체 실적") */
+    topic: text("topic").notNull().default(""),
+    angle: text("angle").notNull().default(""),
+    decision: deskDecisionEnum("decision").notNull(),
+    reason: text("reason").notNull().default(""),
+    scores: jsonb("scores").$type<DeskScores>().notNull(),
+    /** met the low-risk rules (auto-publishing is not on; this is shown to editors) */
+    lowRisk: boolean("low_risk").notNull().default(false),
+    candidateId: uuid("candidate_id").references(() => candidates.id, { onDelete: "set null" }),
+    /** when the draft was written; a "draft" decision without it is still waiting for a slot */
+    draftedAt: ts("drafted_at"),
+    model: text("model").notNull().default(""),
+  },
+  (t) => [index("desk_decisions_at_idx").on(t.at.desc()), index("desk_decisions_candidate_idx").on(t.candidateId)],
+);
+
+/** Versions of the desk's editorial guide. The newest one is in use. */
+export const deskPlaybooks = pgTable("desk_playbooks", {
+  version: integer("version").primaryKey(),
+  body: text("body").notNull(),
+  source: text("source").notNull(), // initial | ai | editor
+  notes: text("notes").notNull().default(""),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  createdById: uuid("created_by_id").references(() => staff.id, { onDelete: "set null" }),
+});
 
 export const activityLog = pgTable(
   "activity_log",

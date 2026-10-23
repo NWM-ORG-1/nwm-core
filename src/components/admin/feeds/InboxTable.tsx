@@ -697,11 +697,30 @@ function SourceCell({ item }: { item: InboxItem }) {
   );
 }
 
+/** The AI desk's call on this item, with its reason on hover. */
+function DeskTag({ desk }: { desk: NonNullable<InboxItem["desk"]> }) {
+  const [text, tone] =
+    desk.decision === "draft"
+      ? desk.drafted
+        ? ([`AI 초안 ${desk.score}`, "good"] as const)
+        : ([`AI 대기 ${desk.score}`, "ice"] as const)
+      : desk.decision === "hold"
+        ? (["AI 보류", "warn"] as const)
+        : (["AI 제외", "neutral"] as const);
+  return (
+    <Badge tone={tone} title={`AI 데스크: ${desk.reason}`}>
+      {text}
+    </Badge>
+  );
+}
+
 function StatusCell({ item, compact = false }: { item: InboxItem; compact?: boolean }) {
+  const desk = item.desk ? <DeskTag desk={item.desk} /> : null;
   if (item.status === "promoted") {
     return (
       <span className={cx("inline-flex gap-1.5", compact ? "items-center" : "flex-col items-start")}>
         <Badge tone="good">승격됨</Badge>
+        {desk}
         {item.candidateId && (
           <Link
             href={`/admin/candidates/${item.candidateId}`}
@@ -723,7 +742,12 @@ function StatusCell({ item, compact = false }: { item: InboxItem; compact?: bool
       </span>
     );
   }
-  return <Badge tone="ice">새 항목</Badge>;
+  return (
+    <span className={cx("inline-flex gap-1.5", compact ? "items-center" : "flex-col items-start")}>
+      <Badge tone="ice">새 항목</Badge>
+      {desk}
+    </span>
+  );
 }
 
 function ItemDetail({

@@ -3,16 +3,20 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { SLUG_RE } from "@/data/public";
+import { TRAFFIC_SOURCES } from "@/lib/traffic";
 import { clientIp, WindowCounter } from "@/server/rate-limit";
 
 /**
- * Cookieless reading signals: view / read (reached the end) / next (moved on).
- * Feeds article stats and the newsroom dashboard. No personal data is stored.
+ * Cookieless reading signals: view / read (reached the end) / next (moved on),
+ * and for views where the reader came from as a category (search, social …).
+ * Feeds article stats, the newsroom dashboard and the AI desk's learning. No
+ * personal data is stored, and no referrer.
  */
 const body = z.object({
   slug: z.string().regex(SLUG_RE),
   ev: z.enum(["view", "read", "next"]),
   dwell: z.number().min(0).max(3_600_000).optional(),
+  src: z.enum(TRAFFIC_SOURCES).optional(),
 });
 
 const perIp = new WindowCounter(60_000, 5_000);
@@ -42,17 +46,24 @@ export async function POST(req: NextRequest) {
   } catch {
     return new Response(null, { status: 400 });
   }
-  const { slug, ev, dwell = 0 } = parsed;
+  const { slug, ev, dwell = 0, src } = parsed;
   if (seen.hit(`${ip}|${slug}|${ev}`) > 1) return quiet();
+  const from = (s: (typeof TRAFFIC_SOURCES)[number]) => (ev === "view" && src === s ? 1 : 0);
   await db.execute(sql`
-    insert into article_stats_daily (article_id, day, views, reads, nexts, dwell_ms)
+    insert into article_stats_daily (article_id, day, views, reads, nexts, dwell_ms, views_search, views_social, views_direct, views_internal, views_other)
     select a.id, (now() at time zone 'Asia/Seoul')::date,
-           ${ev === "view" ? 1 : 0}, ${ev === "read" ? 1 : 0}, ${ev === "next" ? 1 : 0}, ${Math.round(dwell)}
+           ${ev === "view" ? 1 : 0}, ${ev === "read" ? 1 : 0}, ${ev === "next" ? 1 : 0}, ${Math.round(dwell)},
+           ${from("search")}, ${from("social")}, ${from("direct")}, ${from("internal")}, ${from("other")}
       from articles a where a.slug = ${slug} and a.status = 'published'
     on conflict (article_id, day) do update set
       views = article_stats_daily.views + excluded.views,
       reads = article_stats_daily.reads + excluded.reads,
       nexts = article_stats_daily.nexts + excluded.nexts,
-      dwell_ms = article_stats_daily.dwell_ms + excluded.dwell_ms`);
+      dwell_ms = article_stats_daily.dwell_ms + excluded.dwell_ms,
+      views_search = article_stats_daily.views_search + excluded.views_search,
+      views_social = article_stats_daily.views_social + excluded.views_social,
+      views_direct = article_stats_daily.views_direct + excluded.views_direct,
+      views_internal = article_stats_daily.views_internal + excluded.views_internal,
+      views_other = article_stats_daily.views_other + excluded.views_other`);
   return quiet();
 }

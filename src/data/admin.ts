@@ -9,6 +9,7 @@ import {
   articles,
   candidates,
   correctionRequests,
+  deskDecisions,
   experiments,
   feedItems,
   feedSources,
@@ -306,10 +307,12 @@ export async function getInbox(f: InboxFilters) {
       },
       experiment: { code: experiments.code, colorSlot: experiments.colorSlot },
       candidateId: sql<string | null>`(select ci.candidate_id from candidate_items ci where ci.feed_item_id = ${feedItems.id} limit 1)`,
+      desk: { decision: deskDecisions.decision, reason: deskDecisions.reason, score: sql<number>`(${deskDecisions.scores}->>'final')::int`, draftedAt: deskDecisions.draftedAt },
     })
     .from(feedItems)
     .innerJoin(feedSources, eq(feedItems.sourceId, feedSources.id))
     .leftJoin(experiments, eq(feedSources.experimentId, experiments.id))
+    .leftJoin(deskDecisions, eq(deskDecisions.id, feedItems.deskDecisionId))
     .where(where.length ? and(...where) : undefined)
     .orderBy(desc(feedItems.fetchedAt))
     .limit(150);
@@ -329,6 +332,7 @@ export async function getInbox(f: InboxFilters) {
       publishedAt: iso(r.publishedAt),
       fetchedAt: r.fetchedAt.toISOString(),
       source: { ...r.source, licReviewed: r.source.licReviewedAt != null, licReviewedAt: undefined },
+      desk: r.desk ? { decision: r.desk.decision, reason: r.desk.reason, score: Number(r.desk.score ?? 0), drafted: r.desk.draftedAt != null } : null,
     })),
     counts: Object.fromEntries(counts.map((c) => [c.status, c.n])) as Record<FeedItemStatus, number>,
     facets: { sources, experiments: exps },
@@ -453,6 +457,7 @@ export async function getBoard() {
       experimentColor: experiments.colorSlot,
       itemCount: sql<number>`(select count(*) from candidate_items ci where ci.candidate_id = ${candidates.id})::int`,
       articleSlug: sql<string | null>`(select a.slug from articles a where a.id = ${candidates.articleId})`,
+      desk: sql<{ score?: number; lowRisk?: boolean; lowRiskWhy?: string[] } | null>`${candidates.generator}->'desk'`,
     })
     .from(candidates)
     .leftJoin(staff, eq(candidates.assigneeId, staff.id))
@@ -483,6 +488,8 @@ export async function getBoard() {
     experiment: r.experimentCode ? { code: r.experimentCode, colorSlot: r.experimentColor ?? 1 } : null,
     itemCount: r.itemCount,
     articleSlug: r.articleSlug,
+    /** drafted by the AI desk: its score and whether it met the low-risk rules */
+    desk: r.desk ? { score: Number(r.desk.score ?? 0), lowRisk: Boolean(r.desk.lowRisk), lowRiskWhy: r.desk.lowRiskWhy ?? [] } : null,
   }));
 }
 

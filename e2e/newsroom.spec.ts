@@ -33,6 +33,8 @@ const run = {
   articleId: null as string | null,
   slug: null as string | null,
   beat: null as string | null,
+  /** AI desk settings and requests as they were, put back in afterAll */
+  desk: null as { settings: unknown; state: unknown } | null,
 };
 
 let sql: postgres.Sql | undefined;
@@ -270,6 +272,25 @@ test.describe.serial("newsroom", () => {
     await expect(pub.locator(`a[href="/a/${run.slug}"]`)).toHaveCount(0);
     await context.close();
   });
+
+  test("desk: settings are saved and a run request waits for the worker", async ({ page }) => {
+    const [settings] = await db()<{ value: unknown }[]>`select value from site_settings where key = 'desk'`;
+    const [state] = await db()<{ value: unknown }[]>`select value from site_settings where key = 'desk.state'`;
+    run.desk = { settings: settings?.value ?? null, state: state?.value ?? null };
+
+    await page.goto("/admin/desk");
+    await expect(page.getByRole("heading", { name: "AI 데스크", level: 1 })).toBeVisible();
+    const daily = await hydrated(page.getByLabel(/하루 초안 수/));
+    const next = String((Number(await daily.inputValue()) % 40) + 3);
+    await daily.fill(next);
+    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "저장했습니다" })).toBeVisible(SLOW);
+    await page.reload();
+    await expect(page.getByLabel(/하루 초안 수/)).toHaveValue(next);
+
+    await (await hydrated(page.getByRole("button", { name: "지금 실행" }))).click();
+    await expect(page.getByText("실행 요청을 받았습니다")).toBeVisible(SLOW);
+  });
 });
 
 /**
@@ -315,7 +336,13 @@ async function cleanup(q: postgres.Sql): Promise<string[]> {
       delete from activity_log
        where at >= ${since}
          and (${entityIds.length ? tx`entity_id in ${tx(entityIds)}` : tx`false`}
-              or ${admin ? tx`(entity_type = 'settings' and entity_id = 'profile' and actor_id = ${admin.id})` : tx`false`})`;
+              or ${admin ? tx`(entity_type = 'settings' and entity_id in ('profile', 'desk') and actor_id = ${admin.id})` : tx`false`})`;
+    if (run.desk) {
+      for (const [key, value] of [["desk", run.desk.settings], ["desk.state", run.desk.state]] as const) {
+        if (value == null) await tx`delete from site_settings where key = ${key}`;
+        else await tx`update site_settings set value = ${tx.json(value as postgres.JSONValue)} where key = ${key}`;
+      }
+    }
     if (run.profileSaved) {
       // keep the slug; the profile action also rewrote bylines of articles this account authored
       await tx`update staff set name = ${PLACEHOLDER}, title = ${PLACEHOLDER} where login = ${ADMIN_LOGIN}`;

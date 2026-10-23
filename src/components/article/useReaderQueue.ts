@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { Queue, QueueItem } from "@/lib/client/reading";
+import { trafficSource, type TrafficSource } from "@/lib/traffic";
 
 export interface ReaderQueue {
   queue: Queue;
@@ -57,9 +58,22 @@ export function useReaderQueue(slug: string, fallback: Queue): ReaderQueue {
   );
 }
 
+let landed = false;
+/** The page load's own referrer counts once, for the article the reader landed on; views after that are moves inside the site. */
+function viewSource(): TrafficSource {
+  try {
+    const nav = performance.getEntriesByType?.("navigation")?.[0];
+    const landing = !landed && nav != null && new URL(nav.name).pathname === location.pathname;
+    landed = true;
+    return landing ? trafficSource(document.referrer, location.host) : "internal";
+  } catch {
+    return "other";
+  }
+}
+
 export function beacon(slug: string, ev: "view" | "read" | "next", dwell?: number) {
   try {
-    const body = JSON.stringify({ slug, ev, ...(dwell ? { dwell: Math.round(dwell) } : {}) });
+    const body = JSON.stringify({ slug, ev, ...(dwell ? { dwell: Math.round(dwell) } : {}), ...(ev === "view" ? { src: viewSource() } : {}) });
     if (!navigator.sendBeacon?.("/api/beacon", body)) {
       fetch("/api/beacon", { method: "POST", body, keepalive: true }).catch(() => {});
     }

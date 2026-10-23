@@ -333,9 +333,14 @@ function errorText(e: unknown): string {
   return m.replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
-async function callClaude<T>(
-  o: ClaudeGeneratorOptions,
-  req: { purpose: string; model: string; user: string; schema: z.ZodType<T>; maxTokens: number; effort?: Effort; quick?: boolean },
+/**
+ * One structured-output call: records it in the usage ledger, parses the JSON
+ * against `schema`, and throws ClaudeCallError on refusal, truncation or a bad
+ * shape. `system` defaults to the draft writer's prompt; the AI desk passes its own.
+ */
+export async function callClaude<T>(
+  o: Pick<ClaudeGeneratorOptions, "create" | "ledger">,
+  req: { purpose: string; model: string; user: string; schema: z.ZodType<T>; maxTokens: number; effort?: Effort; quick?: boolean; system?: string },
 ): Promise<{ out: T; usage: CallUsage }> {
   if (!o.create) throw new ClaudeCallError("ANTHROPIC_API_KEY가 없습니다");
   const format = outputFormat(req.schema);
@@ -344,7 +349,7 @@ async function callClaude<T>(
   const body: MessageCreateParamsNonStreaming = {
     model: req.model,
     max_tokens: req.maxTokens,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: req.system ?? SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     ...(quick?.thinking ? { thinking: quick.thinking } : {}),
     output_config: { ...(effort ? { effort } : {}), format },
     messages: [{ role: "user", content: req.user }],

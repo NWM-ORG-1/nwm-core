@@ -24,6 +24,8 @@ export interface Job {
   everySec: number;
   /** run at this second offset inside each period (e.g. hourly at :05 → 300) */
   offsetSec?: number;
+  /** checked in each slot before running; false = nothing to do, and no run is logged */
+  due?(now: Date): Promise<boolean>;
   run(now: Date): Promise<JobResult>;
 }
 
@@ -72,6 +74,7 @@ export class JobScheduler {
       const [{ ok }] = await conn<{ ok: boolean }[]>`select pg_try_advisory_lock(hashtext(${`nwm-job:${j.name}`})) as ok`;
       if (!ok) return;
       try {
+        if (j.due && !(await j.due(new Date(started)))) return;
         const r = await j.run(new Date(started));
         await db.insert(ingestRuns).values({
           job: j.name,
