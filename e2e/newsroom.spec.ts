@@ -216,7 +216,7 @@ test.describe.serial("newsroom", () => {
     expect(article).toMatchObject({ title: run.title, status: "published", beat: run.beat });
   });
 
-  test("public: a reader sees it at once — lists, beat page, article with the AI label", async ({ browser }) => {
+  test("public: a reader sees it at once — lists, beat page, article credited to its editor", async ({ browser }) => {
     const { context, page } = await reader(browser);
     for (const path of ["/", "/latest", `/${run.beat}`]) {
       await page.goto(path);
@@ -226,8 +226,8 @@ test.describe.serial("newsroom", () => {
     expect(res?.status()).toBe(200);
     await expect(page.locator("#article-title")).toHaveText(run.title);
     const article = page.locator("article[aria-labelledby='article-title']");
-    await expect(article.getByRole("link", { name: `AI 초안 · ${EDITOR} 검수` }).first()).toBeVisible();
-    await expect(page.locator('meta[name="nwm:ai-label"]')).toHaveAttribute("content", `AI 초안 · ${EDITOR} 검수`);
+    await expect(article.getByRole("link", { name: `편집 ${EDITOR}` }).first()).toBeVisible();
+    await expect(page.locator('meta[name="nwm:ai-label"]')).toHaveCount(0);
     await context.close();
   });
 

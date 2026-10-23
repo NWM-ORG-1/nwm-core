@@ -1,7 +1,7 @@
 import type { AiInvolvement, Beat } from "@/db/schema";
 import type { Block, SentimentSnapshot, SourceRef } from "@/lib/content/blocks";
 import { readSecondsFor, readTimeLabel } from "@/lib/content/meta";
-import { AI_LABEL, aiLabelLong } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL, aiLabelLong, publicCredit } from "@/lib/labels";
 import { ArticleBlocks } from "@/components/article/ArticleBlocks";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { cx } from "@/components/admin/ui";
@@ -84,12 +84,16 @@ export function ArticlePreview({ a, device = "responsive" }: { a: PreviewArticle
             <span>{readTimeLabel(secs)} 읽기</span>
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span title={AI_LABEL[a.ai].explain} className="inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
-              <span className={`hud !text-[9px] !tracking-[0.12em] ${machine ? "text-ice" : "text-fg-3"}`} aria-hidden="true">
-                {machine ? "AI" : "HUMAN"}
+            {AI_DISCLOSURE ? (
+              <span title={AI_LABEL[a.ai].explain} className="inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
+                <span className={`hud !text-[9px] !tracking-[0.12em] ${machine ? "text-ice" : "text-fg-3"}`} aria-hidden="true">
+                  {machine ? "AI" : "HUMAN"}
+                </span>
+                <span>{aiLabelLong(a.ai, a.editorName)}</span>
               </span>
-              <span>{aiLabelLong(a.ai, a.editorName)}</span>
-            </span>
+            ) : (
+              <span className="text-[12.5px] font-medium text-fg-3">{publicCredit(a.ai, a.editorName, a.byline)}</span>
+            )}
           </div>
         </div>
       </header>
@@ -131,20 +135,28 @@ export function ArticlePreview({ a, device = "responsive" }: { a: PreviewArticle
           </section>
         )}
         <div className="rounded-xl border border-line bg-bg-1 px-4 py-3">
-          <p className="text-[13.5px] font-semibold text-fg-2">이 기사는 이렇게 만들어졌습니다</p>
+          <p className="text-[13.5px] font-semibold text-fg-2">{AI_DISCLOSURE ? "이 기사는 이렇게 만들어졌습니다" : "기사 정보"}</p>
           <dl className="mt-3 grid grid-cols-[96px_1fr] gap-y-2 text-[13px] text-fg-3">
-            <dt className="text-fg-4">제작 방식</dt>
-            <dd>
-              {aiLabelLong(a.ai, a.editorName)} — {AI_LABEL[a.ai].explain}
-            </dd>
+            {AI_DISCLOSURE && (
+              <>
+                <dt className="text-fg-4">제작 방식</dt>
+                <dd>
+                  {aiLabelLong(a.ai, a.editorName)} — {AI_LABEL[a.ai].explain}
+                </dd>
+              </>
+            )}
             {a.ai !== "auto" && (
               <>
                 <dt className="text-fg-4">책임 편집</dt>
                 <dd className="text-ice">{a.editorName}</dd>
               </>
             )}
-            <dt className="text-fg-4">바이라인</dt>
-            <dd>{a.byline}</dd>
+            {AI_DISCLOSURE && (
+              <>
+                <dt className="text-fg-4">바이라인</dt>
+                <dd>{a.byline}</dd>
+              </>
+            )}
             <dt className="text-fg-4">1차 출처</dt>
             <dd>{a.sources.length}건</dd>
             <dt className="text-fg-4">버전</dt>

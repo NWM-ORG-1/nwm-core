@@ -4,18 +4,21 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getSiteFlags } from "@/data/public";
 import { GA_ID } from "@/lib/analytics";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL } from "@/lib/labels";
 import { PENDING } from "@/lib/site";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
 
-const DOCS = {
+const ALL_DOCS = {
   ai: "AI 활용 원칙",
   corrections: "정정·반론 보도 신청",
   youth: "청소년보호정책",
   privacy: "개인정보처리방침",
   terms: "이용약관",
 } as const;
-type Doc = keyof typeof DOCS;
+type Doc = keyof typeof ALL_DOCS;
+
+/** /policy/ai is published only while AI_DISCLOSURE is on. */
+const DOCS: Partial<Record<Doc, string>> = Object.fromEntries(Object.entries(ALL_DOCS).filter(([k]) => AI_DISCLOSURE || k !== "ai"));
 
 export function generateStaticParams() {
   return Object.keys(DOCS).map((doc) => ({ doc }));

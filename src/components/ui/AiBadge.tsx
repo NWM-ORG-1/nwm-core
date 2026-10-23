@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AiInvolvement } from "@/db/schema";
-import { AI_LABEL, aiLabelLong } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL, aiLabelLong } from "@/lib/labels";
 
 /**
  * Visible AI-involvement label (AI 기본법 / industry AI codes). Every article
@@ -15,6 +15,7 @@ export function AiBadge({
   editorName?: string | null;
   variant?: "short" | "long";
 }) {
+  if (!AI_DISCLOSURE) return null;
   const label = variant === "long" ? aiLabelLong(value, editorName) : AI_LABEL[value].short;
   const machine = value === "auto" || value === "ai_draft_edited" || value === "ai_assisted";
   return (

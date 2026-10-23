@@ -4,7 +4,7 @@ import { Suspense, ViewTransition } from "react";
 import { getArticle, getPrerenderSlugs, getRelated, getStoryTimeline } from "@/data/public";
 import type { ArticleFull } from "@/data/dto";
 import { BEATS } from "@/lib/beats";
-import { aiLabelLong, IPTC_SOURCE_TYPE } from "@/lib/labels";
+import { AI_DISCLOSURE, aiLabelLong, IPTC_SOURCE_TYPE } from "@/lib/labels";
 import { SITE } from "@/lib/site";
 import type { Queue } from "@/lib/client/reading";
 import { ArticleView, RelatedList, StoryTimeline } from "@/components/article/ArticleView";
@@ -34,10 +34,12 @@ export async function generateMetadata({ params }: PageProps<"/a/[slug]">): Prom
       section: BEATS[a.beat].label,
       tags: a.tags,
     },
-    other: {
-      "nwm:ai-involvement": a.aiInvolvement,
-      "nwm:ai-label": aiLabelLong(a.aiInvolvement, a.editor?.name ?? a.author?.name),
-    },
+    other: AI_DISCLOSURE
+      ? {
+          "nwm:ai-involvement": a.aiInvolvement,
+          "nwm:ai-label": aiLabelLong(a.aiInvolvement, a.editor?.name ?? a.author?.name),
+        }
+      : undefined,
   };
 }
 
@@ -53,13 +55,15 @@ function jsonLd(a: ArticleFull) {
     keywords: a.tags.join(", "),
     inLanguage: "ko-KR",
     mainEntityOfPage: `${SITE.url}/a/${a.slug}`,
-    author: a.author
-      ? { "@type": "Person", name: a.author.name, url: `${SITE.url}/editors/${a.author.slug}` }
-      : { "@type": "Organization", name: a.byline },
+    // with AI disclosure off, only reporter-written pieces name a person as author
+    author:
+      a.author && (AI_DISCLOSURE || a.aiInvolvement === "human")
+        ? { "@type": "Person", name: a.author.name, url: `${SITE.url}/editors/${a.author.slug}` }
+        : { "@type": "Organization", name: AI_DISCLOSURE ? a.byline : SITE.name },
     editor: a.editor ? { "@type": "Person", name: a.editor.name, url: `${SITE.url}/editors/${a.editor.slug}` } : undefined,
     publisher: { "@type": "NewsMediaOrganization", name: SITE.name, alternateName: SITE.short, url: SITE.url, logo: { "@type": "ImageObject", url: `${SITE.url}/icon.svg` } },
     // machine-readable AI provenance (IPTC digital source type)
-    digitalSourceType: IPTC_SOURCE_TYPE[a.aiInvolvement],
+    digitalSourceType: AI_DISCLOSURE ? IPTC_SOURCE_TYPE[a.aiInvolvement] : undefined,
     correction: a.corrections.map((c) => ({ "@type": "CorrectionComment", text: c.note, datePublished: c.publishedAt })),
   };
   return JSON.stringify(data).replace(/</g, "\\u003c");

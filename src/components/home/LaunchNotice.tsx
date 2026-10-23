@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BEATS, NAV_BEATS } from "@/lib/beats";
+import { AI_DISCLOSURE } from "@/lib/labels";
 import { SITE } from "@/lib/site";
 import { beatDotClass } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
@@ -40,9 +41,11 @@ export function LaunchNotice({ email }: { email: string }) {
             <Link href="/about" className="hover:text-fg">
               회사 소개 →
             </Link>
-            <Link href="/policy/ai" className="hover:text-fg">
-              AI 활용 원칙 →
-            </Link>
+            {AI_DISCLOSURE && (
+              <Link href="/policy/ai" className="hover:text-fg">
+                AI 활용 원칙 →
+              </Link>
+            )}
             <Link href="/rss.xml" prefetch={false} className="inline-flex items-center gap-1.5 hover:text-fg">
               <Icon name="rss" size={14} /> RSS
             </Link>

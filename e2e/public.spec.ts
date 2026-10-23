@@ -14,17 +14,18 @@ test.describe("public site", () => {
     await expect(page.getByRole("region", { name: "시장 지표" }).getByText("원/달러").first()).toBeVisible();
   });
 
-  test("article: smart-brevity blocks, AI label with named editor, provenance", async ({ page }) => {
+  test("article: smart-brevity blocks, credit line, article info", async ({ page }) => {
     await page.goto("/");
     await page.locator("article a[href^='/a/']").first().click();
     await expect(page).toHaveURL(/\/a\/\d{6}-[a-z2-9]{6}$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByText("요약", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "왜 중요한가" })).toBeVisible();
-    // every article carries an AI involvement label; AI drafts name the editor
-    await expect(page.locator("a[href='/policy/ai']").first()).toContainText(/AI 초안|자동 생성|AI 보조|기자 작성/);
-    await expect(page.locator('meta[name="nwm:ai-involvement"]')).toHaveCount(1);
-    await expect(page.getByText("기사 제작 정보")).toBeVisible();
+    // AI involvement stays in the newsroom (AI_DISCLOSURE off): no badge, no AI meta, no /policy/ai
+    await expect(page.locator("a[href='/policy/ai']")).toHaveCount(0);
+    await expect(page.locator('meta[name="nwm:ai-involvement"]')).toHaveCount(0);
+    await expect(page.locator("summary", { hasText: "기사 정보" })).toBeVisible();
+    expect((await page.request.get("/policy/ai")).status()).toBe(404);
   });
 
   test("sentiment dashboard renders the index and asset table", async ({ page }) => {

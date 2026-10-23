@@ -8,7 +8,7 @@ import { refreshPulse, usePulse } from "@/lib/client/pulse";
 import { useLastVisit, useReadHistory } from "@/lib/client/reading";
 import { readTimeLabel } from "@/lib/content/meta";
 import { clockKST, dateKST, ymdKST } from "@/lib/format";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL } from "@/lib/labels";
 import { beatDotClass, beatTextClass } from "@/components/ui/BeatChip";
 import { Icon } from "@/components/ui/Icon";
 import { IntentLink } from "./IntentLink";
@@ -181,8 +181,12 @@ export function RiverClient({
                   <p className="mt-1 line-clamp-2 text-[14.5px] leading-relaxed text-fg-3">{c.d}</p>
                   <p className="mt-2 flex items-center gap-2 text-[11.5px] text-fg-4">
                     <span>{readTimeLabel(c.r)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{AI_LABEL[c.ai].short}</span>
+                    {AI_DISCLOSURE && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>{AI_LABEL[c.ai].short}</span>
+                      </>
+                    )}
                     {read && (
                       <>
                         <span aria-hidden="true">·</span>

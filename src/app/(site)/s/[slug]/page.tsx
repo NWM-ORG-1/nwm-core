@@ -5,7 +5,7 @@ import { getStory, getStorySlugs } from "@/data/public";
 import { BEATS } from "@/lib/beats";
 import { readTimeLabel } from "@/lib/content/blocks";
 import { clockKST, dateKST } from "@/lib/format";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL } from "@/lib/labels";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { OrbitBackdrop } from "@/components/ui/OrbitBackdrop";
 import { IntentLink } from "@/components/feed/IntentLink";
@@ -83,7 +83,7 @@ async function Story({ params }: Pick<PageProps<"/s/[slug]">, "params">) {
                 </h2>
                 <p className="mt-1.5 text-[15px] leading-relaxed text-fg-3">{c.dek}</p>
                 <p className="mt-2 text-[12px] text-fg-4">
-                  {readTimeLabel(c.readSeconds)} · {AI_LABEL[c.aiInvolvement].short} · {BEATS[c.beat].label}
+                  {readTimeLabel(c.readSeconds)} · {AI_DISCLOSURE && `${AI_LABEL[c.aiInvolvement].short} · `}{BEATS[c.beat].label}
                 </p>
               </li>
             ))}

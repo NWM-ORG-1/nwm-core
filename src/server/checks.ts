@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Draft } from "@/lib/content/blocks";
 import { plainText } from "@/lib/content/blocks";
 import type { CandidateMode, CheckId, CheckResult } from "@/db/schema";
+import { AI_DISCLOSURE } from "@/lib/labels";
 
 /**
  * Deterministic pre-publish checks. Blocking checks must pass (or be overridden
@@ -22,7 +23,7 @@ export const CHECK_META: Record<CheckId, { label: string; blocking: boolean }> =
   format: { label: "형식 (제목·요약·본문)", blocking: true },
   sources: { label: "1차 출처", blocking: true },
   license: { label: "라이선스·인용 범위", blocking: true },
-  ai_label: { label: "AI 표기·책임 편집자", blocking: true },
+  ai_label: { label: AI_DISCLOSURE ? "AI 표기·책임 편집자" : "책임 편집자", blocking: true },
   legal: { label: "법률 검토 (명예훼손·저작권)", blocking: true },
   numbers: { label: "수치 원문 대조", blocking: false },
   brevity: { label: "간결성", blocking: false },
@@ -152,9 +153,13 @@ export function runChecks(input: {
     "ai_label",
     labelOk,
     mode === "data_auto"
-      ? "‘자동 생성 · 데이터 기반’으로 표기됩니다"
+      ? AI_DISCLOSURE
+        ? "‘자동 생성 · 데이터 기반’으로 표기됩니다"
+        : "‘NWM 데이터 데스크’ 이름으로 나갑니다"
       : labelOk
-        ? `책임 편집자 ${input.editorName} — 기사에 AI 표기와 함께 노출됩니다`
+        ? AI_DISCLOSURE
+          ? `책임 편집자 ${input.editorName} — 기사에 AI 표기와 함께 노출됩니다`
+          : `책임 편집자 ${input.editorName} — 기사에 편집자로 표시됩니다`
         : "책임 편집자가 필요합니다",
   );
 

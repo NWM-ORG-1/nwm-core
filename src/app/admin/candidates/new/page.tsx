@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getAdminShell } from "@/data/admin";
 import { isBeat } from "@/lib/beats";
-import { AI_LABEL, aiLabelLong } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL, aiLabelLong, publicCredit } from "@/lib/labels";
 import { aiStatus } from "@/server/generator/config";
 import { btn, cx, ModeBadge, PageHeader } from "@/components/admin/ui";
 import { IdeaForm } from "@/components/admin/candidates/IdeaForm";
@@ -55,18 +55,28 @@ async function ModeNote() {
           <span className="kicker text-fg-3">아이디어 → AI 어시스트</span>
         </div>
         <h2 className="mt-3 text-[15px] font-bold tracking-[-0.01em] text-fg">독자에게는 이렇게 표기됩니다</h2>
-        <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
-          <span className="hud !text-[9px] !tracking-[0.12em] text-ice" aria-hidden="true">
-            AI
-          </span>
-          {aiLabelLong("ai_assisted", me.name)}
-        </p>
-        <p className="mt-3 text-[12.5px] leading-relaxed text-fg-3">{AI_LABEL.ai_assisted.explain}</p>
+        {AI_DISCLOSURE ? (
+          <>
+            <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
+              <span className="hud !text-[9px] !tracking-[0.12em] text-ice" aria-hidden="true">
+                AI
+              </span>
+              {aiLabelLong("ai_assisted", me.name)}
+            </p>
+            <p className="mt-3 text-[12.5px] leading-relaxed text-fg-3">{AI_LABEL.ai_assisted.explain}</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-2.5 text-[13px] font-semibold text-fg-2">{publicCredit("ai_assisted", me.name, "")}</p>
+            <p className="mt-3 text-[12.5px] leading-relaxed text-fg-3">독자 화면에는 AI 사용 여부를 표시하지 않고, 책임 편집자 이름만 나갑니다. AI 사용 기록은 뉴스룸에 남습니다.</p>
+          </>
+        )}
         <ul className="mt-4 space-y-2.5 border-t border-line pt-4 text-[12.5px] leading-relaxed text-fg-2">
           <li className="flex gap-2">
             <Icon name="check" size={14} className="mt-0.5 shrink-0 text-good" />
             <span>
-              <b className="font-semibold text-fg">편집자 직접 작성 책임</b> — 발행 버튼을 누른 편집자 이름이 기사와 바이라인(글 · 이름)에 남습니다.
+              <b className="font-semibold text-fg">편집자 직접 작성 책임</b> — 발행 버튼을 누른 편집자 이름이{" "}
+              {AI_DISCLOSURE ? "기사와 바이라인(글 · 이름)에 남습니다." : "기사에 ‘편집 이름’으로 남습니다."}
             </span>
           </li>
           <li className="flex gap-2">
@@ -78,7 +88,10 @@ async function ModeNote() {
           <li className="flex gap-2">
             <Icon name="check" size={14} className="mt-0.5 shrink-0 text-good" />
             <span>
-              <b className="font-semibold text-fg">AI를 전혀 쓰지 않으면</b> ‘{AI_LABEL.human.long}’으로 표기됩니다. 초안 생성이나 어시스트를 한 번이라도 쓰면 ‘AI 보조’입니다.
+              <b className="font-semibold text-fg">AI를 전혀 쓰지 않으면</b>{" "}
+              {AI_DISCLOSURE
+                ? `‘${AI_LABEL.human.long}’으로 표기됩니다. 초안 생성이나 어시스트를 한 번이라도 쓰면 ‘AI 보조’입니다.`
+                : "바이라인이 ‘글 · 이름’으로 나갑니다. 초안 생성이나 어시스트를 한 번이라도 쓰면 ‘편집 이름’으로 나갑니다."}
             </span>
           </li>
         </ul>

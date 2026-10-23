@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getEditor, getEditorSlugs } from "@/data/public";
+import { AI_DISCLOSURE } from "@/lib/labels";
 import { RiverClient } from "@/components/feed/RiverClient";
 import { toMini } from "@/components/feed/types";
 
@@ -42,7 +43,9 @@ async function Editor({ params }: Pick<PageProps<"/editors/[slug]">, "params">) 
         </div>
       </div>
       {person.bio && <p className="mt-5 text-[15.5px] leading-relaxed text-fg-2">{person.bio}</p>}
-      <p className="mt-3 text-[13px] text-fg-4">편집·검수한 기사 {articles.length}건. AI가 초안을 쓰거나 작성을 도운 기사는 모두 이름을 밝힌 편집자가 책임집니다.</p>
+      <p className="mt-3 text-[13px] text-fg-4">
+        편집·검수한 기사 {articles.length}건.{AI_DISCLOSURE && " AI가 초안을 쓰거나 작성을 도운 기사는 모두 이름을 밝힌 편집자가 책임집니다."}
+      </p>
       <div className="mt-8">
         <RiverClient cards={articles.map(toMini)} ctx={`editor:${slug}`} label={`${person.name} 편집`} headingLevel={2} />
       </div>

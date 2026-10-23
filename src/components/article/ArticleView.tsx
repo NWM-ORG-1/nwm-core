@@ -3,7 +3,7 @@ import type { ArticleCard, ArticleFull, TimelineEntry } from "@/data/dto";
 import { BEATS } from "@/lib/beats";
 import { readTimeLabel } from "@/lib/content/blocks";
 import { clockKST, dateKST, dateTimeKST } from "@/lib/format";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL, publicCredit } from "@/lib/labels";
 import { AiBadge } from "@/components/ui/AiBadge";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { LocalTime } from "@/components/ui/LocalTime";
@@ -23,6 +23,25 @@ const SOURCE_KIND: Record<string, string> = {
 };
 
 const CORRECTION_KIND: Record<string, string> = { correction: "정정", clarification: "바로잡음", update: "업데이트" };
+
+/**
+ * Who answers for the article, in place of the AI badge while AI_DISCLOSURE is
+ * off: the byline for reporter-written and automatic data pieces, and the
+ * responsible editor ("편집 …") for AI-assisted ones, which are never credited
+ * as written by a person.
+ */
+function Credit({ a }: { a: ArticleFull }) {
+  const person = a.aiInvolvement === "human" ? a.author : a.aiInvolvement === "auto" ? null : a.editor;
+  const text = publicCredit(a.aiInvolvement, a.editor?.name, a.byline);
+  const cls = "text-[12.5px] font-medium text-fg-3";
+  return person ? (
+    <Link href={`/editors/${person.slug}`} className={`${cls} hover:text-fg`}>
+      {text}
+    </Link>
+  ) : (
+    <span className={cls}>{text}</span>
+  );
+}
 
 /** Header + body + provenance of an article (server). The reader chrome wraps it. */
 export function ArticleView({ a }: { a: ArticleFull }) {
@@ -76,7 +95,7 @@ export function ArticleView({ a }: { a: ArticleFull }) {
             </span>
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <AiBadge value={a.aiInvolvement} editorName={a.editor?.name ?? a.author?.name} variant="long" />
+            {AI_DISCLOSURE ? <AiBadge value={a.aiInvolvement} editorName={a.editor?.name ?? a.author?.name} variant="long" /> : <Credit a={a} />}
             <CopyLink title={a.title} />
           </div>
         </div>
@@ -122,14 +141,18 @@ export function ArticleView({ a }: { a: ArticleFull }) {
 
         <details className="group rounded-xl border border-line px-4 py-3 open:bg-bg-1">
           <summary className="flex cursor-pointer list-none items-center justify-between text-[13.5px] font-semibold text-fg-2">
-            기사 제작 정보
+            {AI_DISCLOSURE ? "기사 제작 정보" : "기사 정보"}
             <span className="kicker text-fg-4 group-open:hidden">펼치기</span>
           </summary>
           <dl className="mt-3 grid grid-cols-[96px_1fr] gap-y-2 text-[13px] text-fg-3">
-            <dt className="text-fg-4">제작 방식</dt>
-            <dd>
-              {AI_LABEL[a.aiInvolvement].long.replace("{editor}", a.editor?.name ?? a.author?.name ?? "편집자")} — {AI_LABEL[a.aiInvolvement].explain}
-            </dd>
+            {AI_DISCLOSURE && (
+              <>
+                <dt className="text-fg-4">제작 방식</dt>
+                <dd>
+                  {AI_LABEL[a.aiInvolvement].long.replace("{editor}", a.editor?.name ?? a.author?.name ?? "편집자")} — {AI_LABEL[a.aiInvolvement].explain}
+                </dd>
+              </>
+            )}
             {(a.editor || a.author) && (
               <>
                 <dt className="text-fg-4">책임 편집</dt>
@@ -144,8 +167,12 @@ export function ArticleView({ a }: { a: ArticleFull }) {
                 </dd>
               </>
             )}
-            <dt className="text-fg-4">바이라인</dt>
-            <dd>{a.byline}</dd>
+            {AI_DISCLOSURE && (
+              <>
+                <dt className="text-fg-4">바이라인</dt>
+                <dd>{a.byline}</dd>
+              </>
+            )}
             <dt className="text-fg-4">1차 출처</dt>
             <dd>{a.sources.length}건</dd>
             <dt className="text-fg-4">버전</dt>

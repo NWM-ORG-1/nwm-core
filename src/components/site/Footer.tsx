@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BEATS, NAV_BEATS } from "@/lib/beats";
+import { AI_DISCLOSURE } from "@/lib/labels";
 import { foundedYear, LEGAL_CONTACT_KEYS, LEGAL_FIELDS, PENDING, SITE, type Legal } from "@/lib/site";
 import { Icon } from "@/components/ui/Icon";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -12,7 +13,7 @@ export function Footer({ legal }: { legal: Legal }) {
         <div>
           <Wordmark />
           <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-fg-3">
-            {SITE.tagline}입니다. 기사마다 AI를 어떻게 썼는지와 책임 편집자를 밝힙니다.
+            {SITE.tagline}입니다. 핵심을 먼저 쓰고, 숫자와 출처를 함께 싣습니다.
           </p>
           <div className="mt-5 flex items-center gap-3 text-fg-3">
             <Link href="/rss.xml" className="inline-flex items-center gap-1.5 text-[13px] hover:text-fg" prefetch={false}>
@@ -55,7 +56,7 @@ export function Footer({ legal }: { legal: Legal }) {
           <p className="kicker mb-3 text-fg-4">안내</p>
           <ul className="space-y-2 text-[14px]">
             <li><Link href="/about" className="text-fg-3 hover:text-fg">회사 소개</Link></li>
-            <li><Link href="/policy/ai" className="text-fg-3 hover:text-fg">AI 활용 원칙</Link></li>
+            {AI_DISCLOSURE && <li><Link href="/policy/ai" className="text-fg-3 hover:text-fg">AI 활용 원칙</Link></li>}
             <li><Link href="/policy/corrections" className="text-fg-3 hover:text-fg">정정·반론 보도 신청</Link></li>
             <li><Link href="/corrections" className="text-fg-3 hover:text-fg">정정 기록</Link></li>
             <li><Link href="/policy/youth" className="text-fg-3 hover:text-fg">청소년보호정책</Link></li>

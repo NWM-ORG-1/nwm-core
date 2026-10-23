@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DocList, DocPage, DocSection } from "@/components/site/DocPage";
 import { BLOCK_TITLE_KO, SECTION_LABEL_KO } from "@/lib/content/blocks";
 import { GA_ID } from "@/lib/analytics";
+import { AI_DISCLOSURE } from "@/lib/labels";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = { title: "회사 소개", description: `${SITE.name}가 기사를 만드는 방식을 소개합니다.` };
@@ -36,15 +37,17 @@ export default function AboutPage() {
           ]}
         />
       </DocSection>
-      <DocSection title="AI를 쓰는 방식">
-        <p>
-          뉴웹미디어는 기사 작성에 AI를 씁니다. 공시와 통계, 시세 같은 1차 자료를 바탕으로 AI가 초안을 쓰면, 이름을 밝힌 편집자가 사실관계와 수치를 확인한 뒤 발행합니다. 기사마다 AI를 어떻게
-          썼는지와 책임 편집자를 표시합니다.{" "}
-          <Link href="/policy/ai" className="text-ice hover:underline">
-            AI 활용 원칙 보기 →
-          </Link>
-        </p>
-      </DocSection>
+      {AI_DISCLOSURE && (
+        <DocSection title="AI를 쓰는 방식">
+          <p>
+            뉴웹미디어는 기사 작성에 AI를 씁니다. 공시와 통계, 시세 같은 1차 자료를 바탕으로 AI가 초안을 쓰면, 이름을 밝힌 편집자가 사실관계와 수치를 확인한 뒤 발행합니다. 기사마다 AI를 어떻게
+            썼는지와 책임 편집자를 표시합니다.{" "}
+            <Link href="/policy/ai" className="text-ice hover:underline">
+              AI 활용 원칙 보기 →
+            </Link>
+          </p>
+        </DocSection>
+      )}
       <DocSection title="읽는 방법">
         <DocList
           items={[

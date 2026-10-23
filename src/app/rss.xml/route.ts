@@ -1,6 +1,6 @@
 import { getLatest } from "@/data/public";
 import { BEATS } from "@/lib/beats";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL } from "@/lib/labels";
 import { SITE } from "@/lib/site";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -23,7 +23,7 @@ ${items
 <guid isPermaLink="true">${SITE.url}/a/${a.slug}</guid>
 <pubDate>${new Date(a.publishedAt).toUTCString()}</pubDate>
 <category>${esc(BEATS[a.beat].label)}</category>
-<description>${esc(`${a.dek} [${AI_LABEL[a.aiInvolvement].short}]`)}</description>
+<description>${esc(AI_DISCLOSURE ? `${a.dek} [${AI_LABEL[a.aiInvolvement].short}]` : a.dek)}</description>
 </item>`,
   )
   .join("\n")}

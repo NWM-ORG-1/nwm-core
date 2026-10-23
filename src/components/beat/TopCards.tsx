@@ -1,6 +1,6 @@
 import type { ArticleCard } from "@/data/dto";
 import { readTimeLabel } from "@/lib/content/blocks";
-import { AI_LABEL } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL } from "@/lib/labels";
 import { BeatChip } from "@/components/ui/BeatChip";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { LocalTime } from "@/components/ui/LocalTime";
@@ -34,8 +34,12 @@ export function TopCards({ items, ctx, label }: { items: ArticleCard[]; ctx: str
               <LocalTime iso={lead.publishedAt} />
               <span aria-hidden="true">·</span>
               {readTimeLabel(lead.readSeconds)}
-              <span aria-hidden="true">·</span>
-              {AI_LABEL[lead.aiInvolvement].short}
+              {AI_DISCLOSURE && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  {AI_LABEL[lead.aiInvolvement].short}
+                </>
+              )}
             </p>
           </div>
         </article>

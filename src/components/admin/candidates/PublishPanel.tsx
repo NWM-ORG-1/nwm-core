@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useState, useTransition, type Ref } from "react";
 import type { AiInvolvement, CandidateStatus, CheckResult } from "@/db/schema";
-import { AI_LABEL, aiLabelLong } from "@/lib/labels";
+import { AI_DISCLOSURE, AI_LABEL, aiLabelLong, publicCredit } from "@/lib/labels";
 import { clockKST, dateKST } from "@/lib/format";
 import { moveCandidate, runCandidateChecks, scheduleCandidate, unscheduleCandidate } from "@/server/actions/candidates";
 import { btn, cx } from "@/components/admin/ui";
@@ -163,13 +163,24 @@ export function PublishPanel({
         <h3 id={`${id}-label`} className="kicker text-fg-3">
           독자에게 보이는 표기
         </h3>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
-          <span className={cx("hud !text-[9px] !tracking-[0.12em]", machine ? "text-ice" : "text-fg-3")} aria-hidden="true">
-            {machine ? "AI" : "HUMAN"}
-          </span>
-          {aiLabelLong(ai, editorName)}
-        </p>
-        <p className="mt-2 text-[12px] leading-relaxed text-fg-3">{AI_LABEL[ai].explain}</p>
+        {AI_DISCLOSURE ? (
+          <>
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-line-2 px-2 py-[3px] text-[11px] font-medium text-fg-3">
+              <span className={cx("hud !text-[9px] !tracking-[0.12em]", machine ? "text-ice" : "text-fg-3")} aria-hidden="true">
+                {machine ? "AI" : "HUMAN"}
+              </span>
+              {aiLabelLong(ai, editorName)}
+            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-fg-3">{AI_LABEL[ai].explain}</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-[13px] font-semibold text-fg-2">{publicCredit(ai, editorName, byline)}</p>
+            <p className="mt-2 text-[12px] leading-relaxed text-fg-3">
+              독자 화면에는 AI 사용 여부를 표시하지 않습니다. 제작 방식(‘{aiLabelLong(ai, editorName)}’)은 뉴스룸 기록에만 남습니다.
+            </p>
+          </>
+        )}
         <dl className="mt-3 grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 border-t border-line pt-3 text-[12.5px]">
           <dt className="text-fg-4">책임 편집</dt>
           <dd className="text-fg-2">{ai === "auto" ? "없음 (데이터 자동)" : `${editorName} — 발행하는 편집자`}</dd>

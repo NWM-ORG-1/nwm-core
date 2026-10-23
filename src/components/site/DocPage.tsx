@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AI_DISCLOSURE } from "@/lib/labels";
 
 export function DocPage({ kicker, title, lead, children, updated }: { kicker: string; title: string; lead?: string; children: ReactNode; updated?: string }) {
   return (
@@ -12,7 +13,7 @@ export function DocPage({ kicker, title, lead, children, updated }: { kicker: st
       <nav className="mt-8 flex flex-wrap gap-2 text-[13px]" aria-label="정책 문서">
         {[
           ["/about", "회사 소개"],
-          ["/policy/ai", "AI 활용 원칙"],
+          ...(AI_DISCLOSURE ? [["/policy/ai", "AI 활용 원칙"]] : []),
           ["/policy/corrections", "정정·반론"],
           ["/policy/youth", "청소년보호정책"],
           ["/policy/privacy", "개인정보처리방침"],
