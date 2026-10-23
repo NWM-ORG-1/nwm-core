@@ -1,14 +1,15 @@
 /**
- * Thin orbital ellipses (Warpgate family motif) behind banners. A short light
- * travels each orbit at its own pace, the set drifts and the glow breathes —
- * slow enough to read as ambience. Decorative; hidden from assistive tech and
- * stilled under prefers-reduced-motion (globals.css).
+ * Thin orbital ellipses (Warpgate family motif) behind banners. Each orbit
+ * turns about a degree over several minutes, out of step with the others, and
+ * the glow breathes faintly — slow enough that it reads as still. Decorative;
+ * hidden from assistive tech and stilled under prefers-reduced-motion
+ * (globals.css).
  */
 
 const ORBITS = [
-  { rx: 520, ry: 150, rot: -24, width: 1.2, opacity: 1, period: 38, delay: -6 },
-  { rx: 380, ry: 105, rot: -18, width: 1, opacity: 1, period: 27, delay: -17 },
-  { rx: 640, ry: 230, rot: -31, width: 0.8, opacity: 0.6, period: 56, delay: -31 },
+  { rx: 520, ry: 150, rot: -24, width: 1.2, opacity: 1, period: 150, delay: -40 },
+  { rx: 380, ry: 105, rot: -18, width: 1, opacity: 1, period: 190, delay: -120 },
+  { rx: 640, ry: 230, rot: -31, width: 0.8, opacity: 0.6, period: 240, delay: -75 },
 ] as const;
 
 const CX = 860;
@@ -29,20 +30,16 @@ export function OrbitBackdrop({ className = "" }: { className?: string }) {
         </radialGradient>
       </defs>
       <rect width="1200" height="600" fill="url(#orbit-core)" className="orbit-breathe" />
-      <g className="orbit-drift">
-        {ORBITS.map((o) => {
-          const shape = { cx: CX, cy: CY, rx: o.rx, ry: o.ry, fill: "none", transform: `rotate(${o.rot} ${CX} ${CY})` };
-          const timing = { animationDuration: `${o.period}s`, animationDelay: `${o.delay}s` };
-          return (
-            <g key={o.rx} opacity={o.opacity}>
-              <ellipse {...shape} stroke="url(#orbit-a)" strokeWidth={o.width} />
-              {/* the travelling light: a soft halo and a bright core, each one dash long */}
-              <ellipse {...shape} pathLength={100} strokeDasharray="7 93" stroke="var(--ice)" strokeOpacity={0.16} strokeWidth={o.width * 7} strokeLinecap="round" className="orbit-comet" style={timing} />
-              <ellipse {...shape} pathLength={100} strokeDasharray="3.5 96.5" stroke="var(--ice-2)" strokeOpacity={0.9} strokeWidth={o.width * 1.8} strokeLinecap="round" className="orbit-comet" style={timing} />
-            </g>
-          );
-        })}
-      </g>
+      {ORBITS.map((o) => (
+        <g
+          key={o.rx}
+          opacity={o.opacity}
+          className="orbit-drift"
+          style={{ animationDuration: `${o.period}s`, animationDelay: `${o.delay}s`, transformOrigin: `${CX}px ${CY}px` }}
+        >
+          <ellipse cx={CX} cy={CY} rx={o.rx} ry={o.ry} fill="none" transform={`rotate(${o.rot} ${CX} ${CY})`} stroke="url(#orbit-a)" strokeWidth={o.width} />
+        </g>
+      ))}
     </svg>
   );
 }

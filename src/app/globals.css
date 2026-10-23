@@ -207,27 +207,19 @@ body {
     opacity: 1;
   }
 }
+/* barely there: about a degree over several minutes */
 @keyframes orbit-drift {
   from {
-    transform: rotate(-2deg);
+    transform: rotate(-0.6deg) scale(1);
   }
   to {
-    transform: rotate(4deg);
-  }
-}
-/* a one-dash light running once round an ellipse (pathLength 100) */
-@keyframes orbit-travel {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: -100;
+    transform: rotate(0.8deg) scale(1.012);
   }
 }
 @keyframes orbit-breathe {
   0%,
   100% {
-    opacity: 0.7;
+    opacity: 0.88;
   }
   50% {
     opacity: 1;
@@ -268,14 +260,10 @@ body {
   animation: fade-in 0.3s ease-out both;
 }
 .orbit-drift {
-  animation: orbit-drift 32s ease-in-out infinite alternate;
-  transform-origin: 50% 50%;
-}
-.orbit-comet {
-  animation: orbit-travel 40s linear infinite;
+  animation: orbit-drift 180s ease-in-out infinite alternate;
 }
 .orbit-breathe {
-  animation: orbit-breathe 14s ease-in-out infinite;
+  animation: orbit-breathe 40s ease-in-out infinite;
 }
 
 .skeleton {
@@ -374,8 +362,7 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  .read-progress,
-  .orbit-comet {
+  .read-progress {
     display: none;
   }
 }
