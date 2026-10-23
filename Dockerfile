@@ -52,11 +52,9 @@ ARG SITE_PUB_DATE
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     NEXT_DEPLOYMENT_ID=$RAILWAY_GIT_COMMIT_SHA
-RUN test -n "$DATABASE_PUBLIC_URL" || (echo "✗ DATABASE_PUBLIC_URL build arg is missing (Railway: \${{Postgres.DATABASE_PUBLIC_URL}})" && exit 1)
-# expand-only migrations → optional first-deploy sample seed → prerender with data
-RUN DATABASE_URL="$DATABASE_PUBLIC_URL" npm run db:migrate \
- && if [ "$SEED_ON_EMPTY" = "1" ]; then DATABASE_URL="$DATABASE_PUBLIC_URL" npm run db:seed -- --if-empty; fi \
- && DATABASE_URL="$DATABASE_PUBLIC_URL" npm run build
+# migrate → optional sample seed → next build. A script, not inline: BuildKit logs RUN lines
+# with build args filled in, and DATABASE_PUBLIC_URL holds the database password.
+RUN sh scripts/docker-build.sh
 
 FROM base AS runner
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
