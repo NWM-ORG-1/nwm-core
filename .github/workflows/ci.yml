@@ -24,7 +24,8 @@ env:
 jobs:
   verify:
     name: Typecheck · lint · build · e2e
-    runs-on: ubuntu-latest
+    # Playwright 1.56 cannot install its browser on ubuntu-latest once that became 26.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
