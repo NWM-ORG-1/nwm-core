@@ -59,10 +59,11 @@ export const BEAT_ORDER: Beat[] = ["ai", "crypto", "economy", "tech", "sentiment
 /**
  * Temporary, while the 인터넷신문 registration is under review: the crypto beat
  * is not put forward. Its pages and articles still work by URL, but it leaves
- * the navigation, the tagline, the home page and the ticker. Set to false to
- * bring it back everywhere.
+ * the navigation, the tagline, the home page and the ticker. On unless the
+ * Railway variable NEXT_PUBLIC_CRYPTO_LOW_PROFILE is 0; read at build time, so
+ * a change shows after the redeploy it triggers.
  */
-export const CRYPTO_LOW_PROFILE = true;
+export const CRYPTO_LOW_PROFILE = !/^(0|false|off)$/i.test(process.env.NEXT_PUBLIC_CRYPTO_LOW_PROFILE?.trim() ?? "");
 
 /** Beats offered in navigation and beat lists. */
 export const NAV_BEATS: Beat[] = BEAT_ORDER.filter((b) => !(CRYPTO_LOW_PROFILE && b === "crypto"));

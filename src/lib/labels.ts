@@ -2,13 +2,15 @@ import type { AiInvolvement, CandidateMode, CandidateStatus, SourceKind, SourceS
 
 /**
  * Whether reader-facing pages say how each article was made: the AI badge and
- * short labels, the 제작 방식 line, /policy/ai, the nwm:ai-* meta tags and the
- * IPTC source type. Off by the publisher's decision. The newsroom still records
- * ai_involvement for every article, so turning this back on restores all of it.
- * While off, AI-assisted pieces are credited to their responsible editor
- * ("편집 …"), never as written by a reporter.
+ * short labels, the 제작 방식 line, /policy/ai, the nwm:ai-* meta tags, the
+ * IPTC source type and the AI wording in the sentiment method. Off by the
+ * publisher's decision unless the Railway variable NEXT_PUBLIC_AI_DISCLOSURE is
+ * 1; read at build time, so a change shows after the redeploy it triggers.
+ * The newsroom still records ai_involvement for every article, so turning this
+ * on restores all of it. While off, AI-assisted pieces are credited to their
+ * responsible editor ("편집 …"), never as written by a reporter.
  */
-export const AI_DISCLOSURE = false;
+export const AI_DISCLOSURE = /^(1|true|on)$/i.test(process.env.NEXT_PUBLIC_AI_DISCLOSURE?.trim() ?? "");
 
 /** Reader-facing AI involvement label (visible badge). `{editor}` is replaced with the editor's name. */
 export const AI_LABEL: Record<AiInvolvement, { short: string; long: string; explain: string }> = {

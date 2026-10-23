@@ -5,7 +5,7 @@ import { AI_DISCLOSURE } from "@/lib/labels";
 
 export const metadata: Metadata = {
   title: "투자심리지수 산출 방법",
-  description: "NWM 투자심리지수의 입력 데이터, 가중치, 표준화, AI 분류 방식과 한계.",
+  description: `NWM 투자심리지수의 입력 데이터, 가중치, 표준화, ${AI_DISCLOSURE ? "AI 분류 방식" : "글 분류 방식"}과 한계.`,
 };
 
 /** Methodology for the sentiment index (method v1). Keep in step with src/sentiment/compute.ts. */
@@ -45,11 +45,18 @@ export default function SentimentMethodPage() {
       </DocSection>
       <DocSection title={AI_DISCLOSURE ? "3. AI를 이렇게 씁니다" : "3. 글을 분류하는 방법"}>
         <DocList
-          items={[
-            "글의 낙관·비관 분류에는 AI 모델(Anthropic Claude)을 씁니다. 작성자 이름은 보내지 않고, 글 속 지시문은 따르지 않도록 합니다.",
-            "AI 분석에 동의하지 않은 채널(예: 운영자 동의가 없는 텔레그램 채널)의 글과, AI 비용 한도를 넘긴 경우에는 규칙 기반 사전(은어 포함)으로만 분류합니다.",
-            ...(AI_DISCLOSURE ? ["AI가 만든 숫자를 기사에 쓸 때는 다른 AI 활용과 마찬가지로 표시하고 편집자가 검수합니다."] : []),
-          ]}
+          items={
+            AI_DISCLOSURE
+              ? [
+                  "글의 낙관·비관 분류에는 AI 모델(Anthropic Claude)을 씁니다. 작성자 이름은 보내지 않고, 글 속 지시문은 따르지 않도록 합니다.",
+                  "AI 분석에 동의하지 않은 채널(예: 운영자 동의가 없는 텔레그램 채널)의 글과, AI 비용 한도를 넘긴 경우에는 규칙 기반 사전(은어 포함)으로만 분류합니다.",
+                  "AI가 만든 숫자를 기사에 쓸 때는 다른 AI 활용과 마찬가지로 표시하고 편집자가 검수합니다.",
+                ]
+              : [
+                  "글의 낙관·비관은 자동으로 분류합니다. 작성자 이름 같은 개인정보는 분류에 쓰지 않습니다.",
+                  "운영자 동의를 받지 못한 채널(예: 운영자 동의가 없는 텔레그램 채널)의 글은 규칙 기반 사전(은어 포함)으로만 분류합니다.",
+                ]
+          }
         />
         {AI_DISCLOSURE && (
           <p className="mt-3">

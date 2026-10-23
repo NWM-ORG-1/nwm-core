@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSentimentDashboard } from "@/data/public";
 import { compactKo } from "@/lib/format";
-import { sentimentLabel } from "@/lib/labels";
+import { AI_DISCLOSURE, sentimentLabel } from "@/lib/labels";
 import { ChartBlock } from "@/components/article/ChartBlock";
 import { DivergingBar, Gauge } from "@/components/ui/Gauge";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -119,7 +119,7 @@ export async function SentimentDashboard() {
         </table>
       </div>
       <p className="mt-3 text-[12px] leading-relaxed text-fg-4">
-        게시물 원문·작성자는 저장하거나 공개하지 않고 집계 수치만 씁니다. 글의 낙관·비관 분류에는 AI(Claude)와 규칙 기반 사전을 함께 씁니다. 이 지표는 투자 권유가 아닙니다.
+        게시물 원문·작성자는 저장하거나 공개하지 않고 집계 수치만 씁니다. {AI_DISCLOSURE ? "글의 낙관·비관 분류에는 AI(Claude)와 규칙 기반 사전을 함께 씁니다." : "글의 낙관·비관은 자동 분류와 규칙 기반 사전으로 판정합니다."} 이 지표는 투자 권유가 아닙니다.
       </p>
     </section>
   );
