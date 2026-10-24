@@ -74,7 +74,8 @@ function blockLines(b: Block): string[] {
     case "numbers":
       return [
         `<b>${BLOCK_TITLE_KO.numbers}</b>`,
-        ...b.items.map((n) => `• ${n.trend === "up" ? "▲ " : n.trend === "down" ? "▼ " : ""}<b>${escapeHtml(n.value)}</b> ${escapeHtml(n.label)}${n.delta ? ` (${escapeHtml(n.delta)})` : ""}`),
+        // the arrow goes with the change, as on the site — never in front of a level
+        ...b.items.map((n) => `• <b>${escapeHtml(n.value)}</b> ${escapeHtml(n.label)}${n.delta ? ` (${n.trend === "up" ? "▲ " : n.trend === "down" ? "▼ " : ""}${escapeHtml(n.delta)})` : ""}`),
       ];
     case "section":
       return [`<b>${SECTION_LABEL_KO[b.label]}</b>`, ...(b.text ? [richText(b.text)] : []), ...(b.bullets ?? []).map(bullet)];

@@ -37,11 +37,11 @@ const T = {
 
 const draftOut: DraftOut = {
   title: "누리AI랩, 언어모델 누리-3 공개",
-  dek: "누리AI랩이 23일 매개변수 700억 개 규모의 언어모델 누리-3를 공개했다.",
+  dek: "누리AI랩이 23일 언어모델 누리-3를 공개했다.",
   why: ["국내 AI 기업의 자체 모델 경쟁이 이어진다는 신호다."],
   numbers: [
-    { value: "700억 개", label: "매개변수", trend: "none" },
-    { value: "12%", label: "벤치마크 개선폭", trend: "up" },
+    { value: "700억 개", label: "매개변수", delta: "", trend: "none" },
+    { value: "12%", label: "벤치마크 개선폭", delta: "", trend: "up" },
   ],
   sections: [{ label: "context", text: "누리AI랩은 누리-3를 기업용 API로 먼저 제공한다.", bullets: [] }],
   next: ["내년 상반기 오픈소스 버전 공개 여부"],
@@ -364,8 +364,8 @@ describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
       dek: "가상버거 재출시 뒤 비트코인이 두 배 넘게 올랐다는 주장이 돌고 있다. 12개월 기록이 있는 두 번 모두 2배 이상 올랐다.",
       why: ["재미로 도는 시장 속설을 숫자로 확인했다."],
       numbers: [
-        { value: "+213.8%", label: "2020-11 이후 12개월", trend: "up" },
-        { value: "+77.2%", label: "6개월 뒤", trend: "up" },
+        { value: "+213.8%", label: "2020-11 이후 12개월", delta: "", trend: "up" },
+        { value: "+77.2%", label: "6개월 뒤", delta: "", trend: "up" },
       ],
       sections: [{ label: "yes_but", text: "표본이 두 번뿐이라 우연의 일치일 수 있다.", bullets: [] }],
       next: ["이번 재출시 이후 흐름"],

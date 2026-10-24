@@ -29,7 +29,7 @@ const draft = (over: Partial<Draft> = {}): Draft => ({
   dek: "누리AI랩이 **700억 개** 매개변수 모델을 공개했다.",
   blocks: [
     { type: "why", items: ["국내 AI 기업의 자체 모델 경쟁이 이어진다."] },
-    { type: "numbers", items: [{ value: "700억 개", label: "매개변수", trend: "up" }] },
+    { type: "numbers", items: [{ value: "700억 개", label: "매개변수", delta: "+400억 개", trend: "up" }, { value: "12개", label: "지원 언어", trend: "up" }] },
     { type: "section", label: "context", text: "기업용 API로 먼저 <제공>한다.", bullets: ["오픈소스는 내년"] },
     { type: "next", items: ["오픈소스 버전 공개 시점"] },
   ],
@@ -57,7 +57,8 @@ describe("telegram card", () => {
     assert.match(t, /<b>누리AI랩, 언어모델 누리-3 공개<\/b>/);
     assert.match(t, /<b>700억 개<\/b> 매개변수 모델/, "**bold** in the draft becomes <b>");
     assert.match(t, /기업용 API로 먼저 &lt;제공&gt;한다\./, "draft text is escaped");
-    assert.match(t, /▲ <b>700억 개<\/b> 매개변수/);
+    assert.match(t, /^• <b>700억 개<\/b> 매개변수 \(▲ \+400억 개\)$/m, "the arrow goes with the change");
+    assert.match(t, /^• <b>12개<\/b> 지원 언어$/m, "a level without a change gets no arrow");
     assert.match(t, /⚠️ 라이선스·인용 범위: 라이선스 미검토/);
     assert.doesNotMatch(t, /법률 검토|책임 편집자/, "legal and the editor's name come with 발행, not as warnings");
     assert.match(t, /💬 AI 데스크 78점 \(AI 모델 공개\): 공식 발표 \/ 원문에서 찾지 못한 수치 1건$/m);

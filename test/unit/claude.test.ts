@@ -13,6 +13,8 @@ import {
   createClaudeGenerator,
   draftPrompt,
   DraftOut,
+  freshNumbers,
+  SYSTEM_PROMPT,
   type ClaudeGeneratorOptions,
   type CreateCall,
   type UsageEntry,
@@ -26,7 +28,7 @@ import type { GenItem } from "@/server/generator/types";
 const item = (over: Partial<GenItem> = {}): GenItem => ({
   id: "i1",
   title: "누리AI랩, 1,200억 원 규모 시리즈C 투자 유치",
-  summary: "누리AI랩이 22일 1,200억 원 규모의 시리즈C 투자를 유치했다고 밝혔다. 회사가 밝힌 기업가치는 8,000억 원이다.",
+  summary: "누리AI랩이 22일 1,200억 원 규모의 시리즈C 투자를 유치했다고 밝혔다. 회사가 밝힌 기업가치는 8,000억 원으로 직전 투자 때보다 3,000억 원 늘었다. 누적 투자액은 2,100억 원이다.",
   sourceName: "누리AI랩 보도자료",
   sourceKind: "rss",
   trustTier: 1,
@@ -41,11 +43,12 @@ const item = (over: Partial<GenItem> = {}): GenItem => ({
 
 const good = (): DraftOut => ({
   title: "“누리AI랩, 1,200억 원 시리즈C 유치.”",
-  dek: "누리AI랩이 22일 1,200억 원 규모 시리즈C 투자를 유치했다. 기업가치는 8,000억 원이다.",
+  dek: "누리AI랩이 22일 1,200억 원 규모 시리즈C 투자를 유치했다.",
   why: ["국내 AI 스타트업으로 투자금이 다시 몰리는지 보여준다.", "  "],
   numbers: [
-    { value: "1,200억 원", label: "시리즈C 투자 규모", trend: "up" },
-    { value: "8,000억 원", label: "기업가치", trend: "none" },
+    { value: "8,000억 원", label: "기업가치·직전 투자 대비", delta: "+3,000억 원", trend: "none" },
+    { value: "2,100억 원", label: "누적 투자액", delta: "", trend: "up" },
+    { value: "1,200억 원", label: "시리즈C 투자 규모", delta: "", trend: "up" },
   ],
   sections: [
     { label: "context", text: "- 회사는 투자금을 연구 인력 확충에 쓸 계획이다.", bullets: [] },
@@ -221,8 +224,14 @@ describe("assembled draft", () => {
     const why = draft.blocks[0] as Extract<Draft["blocks"][number], { type: "why" }>;
     assert.equal(why.items.length, 1, "blank items dropped");
     const nums = draft.blocks[1] as Extract<Draft["blocks"][number], { type: "numbers" }>;
-    assert.deepEqual(nums.items[0], { value: "1,200억 원", label: "시리즈C 투자 규모", trend: "up" });
-    assert.ok(!("trend" in nums.items[1]), "‘none’ means no trend");
+    assert.deepEqual(
+      nums.items,
+      [
+        { value: "8,000억 원", label: "기업가치·직전 투자 대비", delta: "+3,000억 원", trend: "up" },
+        { value: "2,100억 원", label: "누적 투자액" },
+      ],
+      "the change's sign gives the arrow; a level gets none; the title's own figure is not repeated",
+    );
     const section = draft.blocks[2] as Extract<Draft["blocks"][number], { type: "section" }>;
     assert.equal(section.text, "회사는 투자금을 연구 인력 확충에 쓸 계획이다.", "list markers stripped");
     assert.deepEqual(draft.tags, ["누리AI랩", "투자"]);
@@ -245,6 +254,37 @@ describe("assembled draft", () => {
     const { draft, notes } = assembleDraft(out, [item()]);
     assert.ok(!draft.blocks.some((b) => b.type === "numbers"));
     assert.match(notes.join(), /수치가 1건뿐/);
+  });
+
+  it("puts the arrow on the change, never on a level", () => {
+    const nums = (numbers: DraftOut["numbers"]) =>
+      (assembleDraft({ ...good(), numbers }, [item()]).draft.blocks.find((b) => b.type === "numbers") as Extract<Draft["blocks"][number], { type: "numbers" }>).items;
+    assert.deepEqual(
+      nums([
+        { value: "38.5%", label: "비정규직 비중", delta: "▲0.3%p", trend: "none" },
+        { value: "178만 6천명", label: "비전형 근로자", delta: "-4만 8천명", trend: "up" },
+        { value: "2.0%", label: "실업률", delta: "0.2%p 하락", trend: "down" },
+        { value: "867만 1천명", label: "비정규직 근로자", delta: "", trend: "up" },
+      ]),
+      [
+        { value: "38.5%", label: "비정규직 비중", delta: "0.3%p", trend: "up" },
+        { value: "178만 6천명", label: "비전형 근로자", delta: "-4만 8천명", trend: "down" },
+        { value: "2.0%", label: "실업률", delta: "0.2%p 하락", trend: "down" },
+        { value: "867만 1천명", label: "비정규직 근로자" },
+      ],
+    );
+  });
+
+  it("leaves out key numbers that only repeat the title and dek", () => {
+    const k = (value: string, delta?: string) => ({ value, label: "x", ...(delta ? { delta } : {}) });
+    const title = "비정규직 10만 3천명 늘 때 정규직은 1만명 늘어";
+    const dek = "8월 비정규직은 **867만 1천명**이다. 비중은 38.5%다.";
+    assert.deepEqual(
+      freshNumbers([k("867만 1천명"), k("+10만 3천명"), k("38.5%", "+0.3%p"), k("318만명", "+13만 5천명"), k("3건"), k("47")], title, dek).map((n) => n.value),
+      ["38.5%", "318만명", "3건", "47"],
+      "a repeated level or change goes; a level with a change the dek lacks stays; 3건 is not in 13건, 47 is not in 470",
+    );
+    assert.deepEqual(freshNumbers([k("3건"), k("47")], "13건 접수", "470명"), [k("3건"), k("47")]);
   });
 
   it("applies tighten edits to text only — numbers, quotes and unknown blocks stay as they were", () => {
@@ -297,6 +337,8 @@ describe("Claude draft generator", () => {
     const system = body.system as Array<{ text: string; cache_control?: unknown }>;
     assert.ok(system[0].cache_control, "system prompt is cached");
     assert.match(system[0].text, /사실 원칙/);
+    assert.match(system[0].text, /같은 숫자와 같은 사실은 기사 전체에서 한 번만/);
+    assert.match(SYSTEM_PROMPT, /big_picture 넓게 보면: [^\n]*분류별 수치는 여기에 쓰지 않습니다/);
     assert.match(String(body.messages[0].content), /<자료 번호="1">/);
   });
 
@@ -373,7 +415,7 @@ describe("Claude assists", () => {
   });
 
   it("warns about figures in a numbers suggestion that the sources do not contain", async () => {
-    const { create } = fakeCreate([{ items: [{ value: "1,200억 원", label: "투자", trend: "up" }, { value: "45%", label: "점유율", trend: "none" }], note: "" }]);
+    const { create } = fakeCreate([{ items: [{ value: "1,200억 원", label: "투자", delta: "", trend: "up" }, { value: "45%", label: "점유율", delta: "", trend: "none" }], note: "" }]);
     const r = await createClaudeGenerator(opts({ create })).assist({ draft, beat: "ai", items: [item()], action: "numbers" });
     assert.match(r.note, /원문에서 찾지 못한 수치: 45/);
   });

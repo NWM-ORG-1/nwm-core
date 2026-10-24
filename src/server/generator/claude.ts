@@ -26,7 +26,7 @@ import { DERIVED_PREFIX, loadImages, materialFromRead, photosOf, POST_READ_SYSTE
  */
 
 export const CLAUDE_GENERATOR_ID = "claude";
-export const PROMPT_VERSION = "draft-2";
+export const PROMPT_VERSION = "draft-3";
 
 /* ───────────────────────── seams ───────────────────────── */
 
@@ -123,22 +123,34 @@ export const SYSTEM_PROMPT = `당신은 뉴웹미디어(NWM)의 AI 초안 기자
 - 요약(dek)에 쓴 사실을 단락에서 되풀이하지 않습니다.
 - 자료로 채울 내용이 없으면 그 단락을 쓰지 않습니다. 단락이 0개여도 됩니다. 산업 일반론으로 분량을 채우지 않습니다.
 
+# 한눈에 와닿게 — 자료를 옮기지 말고 골라 씁니다
+- 쓰기 전에 이 기사의 핵심 메시지를 한 문장으로 정합니다. 제목과 요약에 그 메시지를 담고, 나머지 블록은 그 메시지를 뒷받침할 때만 씁니다.
+- 자료의 숫자를 다 옮기지 않습니다. 핵심 메시지를 보여 주는 숫자만 고르고 나머지는 버립니다. 분류별(유형·성별·연령·지역·품목) 숫자를 하나씩 늘어놓지 않습니다.
+- 숫자는 비교와 함께 씁니다. 자료에 변화(전년 대비, 전월 대비, 직전 값)가 있으면 수준만 쓰지 않고 변화를 같이 씁니다. 예: "비중은 38.5%로 1년 전보다 0.3%p 높아졌다."
+- 숫자의 의미는 자료에 있는 숫자 두 개를 나란히 놓아 보여 줍니다. 배수·비율·차이를 새로 계산하지 않고 말로 풉니다.
+  예: "비정규직이 10만 3천명 늘 때 정규직은 1만명 늘었다."
+  예: "반도체 수출 증가 폭(25억 달러)이 전체 수출 증가 폭(18억 달러)보다 컸다. 반도체를 빼면 수출은 줄었다는 뜻이다."
+  한 대상이 여러 분류에 함께 들어가는 통계(예: 비정규직의 한시적·시간제·비전형)는 분류끼리 더하거나 빼서 해석하지 않습니다.
+- 같은 숫자와 같은 사실은 기사 전체에서 한 번만 씁니다. 제목·요약에 쓴 숫자를 왜 중요한가·숫자로 보면·단락에서 다시 쓰지 않습니다.
+- 내용 없이 중요하다고만 하는 말을 쓰지 않습니다. 예: "참고가 된다", "주목된다", "관심이 쏠린다", "의미가 있다", "시사하는 바가 크다", "좌우하고 있다". 무엇이 누구에게 어떻게 달라지는지 씁니다.
+- 짧을수록 좋습니다. 블록마다 앞 블록에 없는 새 정보가 있어야 합니다. 보탤 것이 없는 블록은 비웁니다.
+
 # 문체
 - 기사체 평서문("-다")으로 씁니다. 한 문장에는 한 가지 사실만 담아 짧게 씁니다.
 - 과장·감탄 표현("충격", "역대급", "폭발", "초비상")을 쓰지 않습니다.
 - 강조는 **굵게**만, 기사 전체에서 한두 번 씁니다. HTML, 마크다운 제목·목록 기호, 이모지는 쓰지 않습니다.
 
 # 기사 구조
-- 제목(title): 45자 이내. 누가 무엇을 했는지 담은 평서형. 물음표·느낌표·따옴표·말줄임표를 쓰지 않습니다.
-- 요약(dek): 1–2문장, 120자 이내. 무슨 일이 있었는지 한눈에 알게 합니다.
-- 왜 중요한가(why): 1–3개, 각 한 문장. 독자(투자자·업계 종사자)에게 무엇이 달라지는지 씁니다.
-- 숫자로 보면(numbers): 자료에 있는 핵심 수치 2–4개. value는 짧게("1,234억 원", "+3.2%", "$1.2B"), label은 그 수치가 무엇인지 20자 이내로. 쓸 만한 수치가 2개보다 적으면 비웁니다.
-- 본문 단락(sections): 0–3개. 자료에 근거한 내용이 있을 때만 쓰고, label로 성격을 정합니다.
-  zoom_in 자세히 보면: 핵심 사실의 구체적 내용(대상·범위·조건·방식·일정)
+- 제목(title): 45자 이내. 핵심 메시지를 담은 평서형. 숫자는 수준보다 변화나 대비가 드러나게 씁니다. 예: "8월 비정규직 867만 1천명"보다 "비정규직 10만 3천명 늘 때 정규직은 1만명 늘어". 물음표·느낌표·따옴표·말줄임표를 쓰지 않습니다.
+- 요약(dek): 1–2문장, 120자 이내. 무슨 일이 있었고 무엇이 핵심인지 한눈에 알게 합니다.
+- 왜 중요한가(why): 1–3개, 각 한 문장. 숫자를 늘어놓지 않고, 이 일로 독자(투자자·업계 종사자)에게 무엇이 달라지는지 씁니다. 항목마다 다른 이야기를 씁니다.
+- 숫자로 보면(numbers): 핵심 메시지를 뒷받침하는 수치 2–4개. 제목·요약에 쓴 수치는 넣지 않습니다. value는 수준("38.5%", "318만명", "1,234억 원"), delta는 자료에 있는 변화("+0.3%p", "+13만 5천명", "-4만 8천명"), label은 무엇의 수치이고 무엇과 비교한 변화인지 20자 이내("비정규직 비중·1년 전 대비")로 씁니다. 자료에 변화가 없거나 value가 그 자체로 변화율("+3.2%")이면 delta를 비웁니다. 쓸 만한 수치가 2개보다 적으면 비웁니다.
+- 본문 단락(sections): 0–2개. 앞 블록에 없는 새 정보가 자료에 있을 때만 쓰고, label로 성격을 정합니다.
+  zoom_in 자세히 보면: 핵심 사실의 구체적 내용(대상·범위·조건·방식·일정). 분류별 수치는 가장 크게 움직인 2–3개만 씁니다
   context 맥락: 이 일이 나온 배경(앞선 발표, 관련 제도, 직전 흐름)
-  big_picture 넓게 보면: 이 일이 속한 더 큰 흐름. 자료가 그 흐름을 직접 다룰 때만 씁니다
+  big_picture 넓게 보면: 이 일이 속한 더 긴 흐름(몇 년째 이어진 추세, 역대 최고·최저, 다른 시기와의 비교). 자료가 그 흐름을 직접 다룰 때만 씁니다. 분류별 수치는 여기에 쓰지 않습니다
   yes_but 짚어볼 점: 자료에 나온 한계·조건·반론·위험(적용 대상의 제한, 시행 시점, 반대 의견 등). 모르는 것을 나열하는 자리가 아닙니다
-  between_lines 행간: 자료가 직접 말하지 않아도 자료만으로 분명히 읽히는 의미
+  between_lines 행간: 자료가 직접 말하지 않아도 자료만으로 분명히 읽히는 의미(자료의 숫자를 나란히 놓아야 보이는 것 등). 앞에서 한 말을 다시 쓰는 자리가 아닙니다
   view_from 현장의 시각: 자료에 나온 당사자·업계의 반응
   disagreement 다른 시각: 자료에 나온 반대 의견
   bottom_line 결론: 한 문장 정리
@@ -274,10 +286,11 @@ export function draftPrompt(input: { items: GenItem[]; beat: Beat; mode: Candida
 
 /* ───────────────────────── output ───────────────────────── */
 
-const trend = z.enum(["up", "down", "flat", "none"]).describe("수치의 방향. 방향이 없거나 모르면 none");
+const trend = z.enum(["up", "down", "flat", "none"]).describe("delta의 방향. delta가 없으면 none");
 const keyNumberOut = z.object({
-  value: z.string().describe('짧은 수치 표기. 예: "1,234억 원", "+3.2%"'),
-  label: z.string().describe("무엇의 수치인지, 20자 이내"),
+  value: z.string().describe('짧은 수치 표기(수준). 예: "38.5%", "1,234억 원", "+3.2%"'),
+  label: z.string().describe("무엇의 수치이고 무엇과 비교한 변화인지, 20자 이내"),
+  delta: z.string().describe('자료에 있는 변화. 예: "+0.3%p", "-4만 8천명". 없으면 빈 문자열'),
   trend,
 });
 
@@ -285,7 +298,7 @@ export const DraftOut = z.object({
   title: z.string().describe("45자 이내 제목"),
   dek: z.string().describe("요약: 1–2문장, 120자 이내"),
   why: z.array(z.string()).describe("왜 중요한가: 1–3개, 각 한 문장"),
-  numbers: z.array(keyNumberOut).describe("숫자로 보면: 자료에 있는 수치 2–4개, 없으면 빈 배열"),
+  numbers: z.array(keyNumberOut).describe("숫자로 보면: 자료에 있고 제목·요약에 없는 수치 2–4개, 없으면 빈 배열"),
   sections: z
     .array(
       z.object({
@@ -294,7 +307,7 @@ export const DraftOut = z.object({
         bullets: z.array(z.string()).describe("2–5개. text를 쓰면 빈 배열"),
       }),
     )
-    .describe("본문 단락 0–3개. 자료에 근거한 내용이 없으면 빈 배열"),
+    .describe("본문 단락 0–2개. 앞 블록에 없는 새 정보가 자료에 없으면 빈 배열"),
   next: z.array(z.string()).describe("다음 관전 포인트 1–3개"),
   tags: z.array(z.string()).describe("2–4개"),
   tickers: z.array(z.string()).describe("종목 티커, 없으면 빈 배열"),
@@ -324,12 +337,47 @@ function unwrapTitle(t: string): string {
   return inner.replace(/[.。]$/, "");
 }
 
+const ARROW = /^\s*([▲▼])\s*/;
+
+/**
+ * An arrow belongs to a change (delta), never to a level: "▲ 867만 1천명"
+ * reads as if the level went up by that much. The change's own sign decides
+ * the arrow; the model's trend only when the change has none ("0.3%p 상승").
+ */
 function keyNumbers(a: DraftOut["numbers"], n = 4): KeyNumber[] {
   return a
-    .map((k) => ({ value: line(k.value, 200), label: line(k.label, 60), trend: k.trend }))
+    .map((k) => ({ value: line(k.value, 200), label: line(k.label, 60), delta: line(k.delta, 200), trend: k.trend }))
     .filter((k) => k.value && k.label && k.value.length <= 24)
     .slice(0, n)
-    .map((k) => ({ value: k.value, label: k.label, ...(k.trend !== "none" ? { trend: k.trend } : {}) }));
+    .map((k) => {
+      const arrow = ARROW.exec(k.delta)?.[1];
+      const delta = k.delta.replace(ARROW, "");
+      if (!delta || delta.length > 24) return { value: k.value, label: k.label };
+      const signed = arrow === "▲" || delta.startsWith("+") ? "up" : arrow === "▼" || /^[-−]/.test(delta) ? "down" : null;
+      const trend = signed ?? (k.trend === "none" ? null : k.trend);
+      return { value: k.value, label: k.label, delta, ...(trend ? { trend } : {}) };
+    });
+}
+
+const SIGN = /^[+\-−▲▼]/;
+const squash = (s: string) => s.replace(/\*\*/g, "").replace(/\s+/g, "").replace(SIGN, "");
+
+/** `s` contains the figure `fig` whole — "3건" is not in "13건", "47" is not in "470". */
+function mentions(s: string, fig: string): boolean {
+  const f = squash(fig);
+  if (!f) return false;
+  for (let i = s.indexOf(f); i >= 0; i = s.indexOf(f, i + 1)) {
+    const before = s[i - 1] ?? "";
+    const after = s[i + f.length] ?? "";
+    if (!/[\d.,]/.test(before) && !(/\d$/.test(f) && /[\d.,]/.test(after))) return true;
+  }
+  return false;
+}
+
+/** Key numbers that only repeat the title and dek (value and change both already there) say nothing new. */
+export function freshNumbers(nums: KeyNumber[], title: string, dek: string): KeyNumber[] {
+  const shown = squash(`${title} ${dek}`);
+  return nums.filter((k) => ![k.value, k.delta ?? ""].filter(Boolean).every((fig) => mentions(shown, fig)));
 }
 
 function sourceRefs(used: GenItem[], indexes: number[]): SourceRef[] {
@@ -358,7 +406,7 @@ export function assembleDraft(out: DraftOut, used: GenItem[]): { draft: Draft; n
   const why = lines(out.why, 300, 3);
   if (why.length) blocks.push({ type: "why", items: why });
 
-  const nums = keyNumbers(out.numbers);
+  const nums = freshNumbers(keyNumbers(out.numbers, 8), out.title, out.dek).slice(0, 4);
   if (nums.length >= 2) blocks.push({ type: "numbers", items: nums });
   else if (nums.length === 1) notes.push("수치가 1건뿐이라 숫자 블록을 뺐습니다");
 
@@ -583,7 +631,7 @@ function draftAsText(d: Draft): string {
         out.push(`[#${n} ${b.type}] ${b.items.map((s) => `· ${s}`).join(" ")}`);
         break;
       case "numbers":
-        out.push(`[#${n} numbers] ${b.items.map((k) => `${k.value} ${k.label}`).join(" / ")}`);
+        out.push(`[#${n} numbers] ${b.items.map((k) => `${k.value} ${k.label}${k.delta ? ` (${k.delta})` : ""}`).join(" / ")}`);
         break;
       case "section":
         out.push(`[#${n} section ${b.label}] ${[b.text ?? "", ...(b.bullets ?? []).map((s) => `· ${s}`)].join(" ").trim()}`);
@@ -609,8 +657,9 @@ const ASSIST_TASK: Record<AssistAction, string> = {
     "과제: 이 기사의 제목 후보 3개를 씁니다. 각각 45자 이내이고, 서로 다른 각도(핵심 사실 / 숫자 / 의미)로 씁니다. 지금 제목과 같은 것은 빼고, 자료와 초안에 있는 사실만 씁니다.",
   tighten:
     "과제: 초안을 더 짧게 다듬습니다. 사실·숫자·고유명사는 그대로 두고 군더더기만 뺍니다. 요약은 1–2문장 90자 이내, 단락은 2문장 이내, 목록 항목은 한 문장으로 씁니다. 블록 번호(block)마다 고친 글을 돌려줍니다. section은 text를 고치거나(줄글 단락) items에 bullets를 담고, why·next는 items에 담습니다. 고칠 필요가 없는 블록과 그 밖의 블록은 빼고 돌려줍니다.",
-  why: "과제: ‘왜 중요한가’ 항목 2–3개를 새로 씁니다. 독자(투자자·업계 종사자)에게 무엇이 달라지는지 각 한 문장으로 씁니다.",
-  numbers: "과제: 자료에 있는 핵심 수치 2–4개로 ‘숫자로 보면’을 씁니다. 자료에 없는 숫자, 계산한 숫자는 쓰지 않습니다.",
+  why: "과제: ‘왜 중요한가’ 항목 2–3개를 새로 씁니다. 숫자를 늘어놓지 않고, 독자(투자자·업계 종사자)에게 무엇이 달라지는지 각 한 문장으로 씁니다.",
+  numbers:
+    "과제: 자료에 있는 핵심 수치 2–4개로 ‘숫자로 보면’을 씁니다. 제목·요약에 이미 있는 수치는 빼고, 자료에 변화(전년 대비 등)가 있으면 delta에 씁니다. 자료에 없는 숫자, 계산한 숫자는 쓰지 않습니다.",
   next: "과제: ‘다음 관전 포인트’ 2–3개를 씁니다. 자료에 나온 예정 일정·후속 절차·지켜볼 지표를 우선합니다.",
 };
 
