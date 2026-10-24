@@ -13,6 +13,7 @@ import { T } from "@/lib/cache-tags";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { invalidateFromAction } from "../invalidate";
+import { setIngestPausedAs } from "../ops";
 import { fail, ok, type ActionState } from "./result";
 
 /** The worker picks the source up on its next tick (≈5 s). */
@@ -101,11 +102,7 @@ export async function setIngestPaused(input: { paused: boolean }): Promise<Actio
   try {
     const me = await requireStaff();
     const { paused } = z.object({ paused: z.boolean() }).parse(input);
-    await db
-      .insert(siteSettings)
-      .values({ key: "ingest", value: { paused } })
-      .onConflictDoUpdate({ target: siteSettings.key, set: { value: { paused }, updatedAt: new Date() } });
-    await logActivity(db, { actorId: me.id, kind: "settings", entityType: "settings", entityId: "ingest", summary: paused ? "전체 수집 일시정지" : "전체 수집 재개" });
+    await setIngestPausedAs(db, me, paused);
     refresh();
     return ok(paused ? "모든 수집을 멈췄습니다 (30초 안에 반영)." : "수집을 다시 시작합니다.");
   } catch (e) {

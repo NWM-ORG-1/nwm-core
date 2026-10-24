@@ -2,7 +2,25 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CheckResult } from "@/db/schema";
 import type { Draft } from "@/lib/content/blocks";
-import { ago, cardKeyboard, cardText, escapeHtml, openChecks, parseCallback, parseQuickEdits, REJECT_REASONS, statusText, type CardInput, type StatusSnapshot } from "@/server/telegram/format";
+import {
+  ago,
+  cardKeyboard,
+  cardText,
+  escapeHtml,
+  notesKeyboard,
+  notesText,
+  openChecks,
+  parseCallback,
+  parseControl,
+  parseNoteCommand,
+  parseQuickEdits,
+  REJECT_REASONS,
+  settingsKeyboard,
+  statusKeyboard,
+  statusText,
+  type CardInput,
+  type StatusSnapshot,
+} from "@/server/telegram/format";
 
 /* fixtures — fictional companies only */
 const ID = "3f2b7c1e-8a4d-4f6b-9c2e-1d5a7b9c0e12";
@@ -100,6 +118,7 @@ describe("/status", () => {
   const minus = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
   const snap = (over: Partial<StatusSnapshot> = {}): StatusSnapshot => ({
     workerBeatAt: minus(12_000),
+    ingestPaused: false,
     sources: { active: 22, paused: 3, error: 0, failing: [] },
     items: { hour: 18, day: 412, lastCheckAt: minus(60_000), lastNewAt: minus(300_000) },
     desk: { enabled: true, cadenceMin: 60, dailyDrafts: 10, draftedToday: 3, queued: 2, lastRun: { at: minus(14 * 60_000), seen: 12, stories: 4, drafted: 1, error: null }, spendUsd: 4.21, budgetUsd: 40, allUsd: 6.03, capUsd: 50 },
@@ -142,5 +161,56 @@ describe("/status", () => {
     assert.match(t, /^ ⚠️ 마지막 실행 2일 전 실패 — ANTHROPIC_API_KEY가 없습니다$/m);
     assert.match(t, /^ ⚠️ 이번 달 \$40\.00 \/ \$40\.00/m);
     assert.equal(ago(null, NOW), "기록 없음");
+  });
+});
+
+describe("control panels", () => {
+  const settings = { enabled: true, dailyDrafts: 10, cadenceMin: 60, pacing: "immediate" as const, minScore: 60, monthlyBudgetUsd: 40 };
+  const notes = [
+    { id: ID, text: "기사 끝을 <전망>으로 맺지 않는다.", scopeLabel: "모든 초안", hits: 1, pinned: true, origin: "editor", fading: false },
+    { id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", text: "정부 발표 기사는 제목에 수치를 앞세운다.", scopeLabel: "경제", hits: 4, pinned: false, origin: "ai", fading: true },
+  ];
+
+  it("every button fits Telegram's 64 bytes and parses back to what it does", () => {
+    const status = { ingestPaused: false, desk: { enabled: true } } as Parameters<typeof statusKeyboard>[0];
+    const boards = [statusKeyboard(status, true), statusKeyboard({ ...status, ingestPaused: true, desk: { ...status.desk, enabled: false } }, false), settingsKeyboard(settings), notesKeyboard(notes), notesKeyboard(notes, ID)];
+    for (const b of boards.flat(2)) {
+      assert.ok(Buffer.byteLength(b.callback_data!) <= 64, b.callback_data);
+      assert.ok(parseControl(b.callback_data), b.callback_data);
+    }
+    assert.deepEqual(parseControl("ctl:ingest:off"), { kind: "ingest", on: false });
+    assert.deepEqual(parseControl("set:daily:15"), { kind: "set", patch: { dailyDrafts: 15 } });
+    assert.deepEqual(parseControl("set:min:-5"), { kind: "min", delta: -5 });
+    assert.deepEqual(parseControl(`nt:rm:${ID}`), { kind: "note", op: "rm", id: ID });
+    for (const bad of ["set:daily:7", "set:cadence:45", "ctl:desk:maybe", "nt:rm:x", "ctl:view:admin", `pub:${ID}`, undefined]) assert.equal(parseControl(bad), null, String(bad));
+    assert.match(statusKeyboard(status, true)[1][0].text, /수집 일시정지/);
+    assert.match(statusKeyboard({ ...status, ingestPaused: true }, true)[1][0].text, /수집 재개/);
+    assert.equal(settingsKeyboard(settings)[0][1].text, "✓ 하루 10건");
+  });
+
+  it("asks once more before deleting a note, in place", () => {
+    const k = notesKeyboard(notes, ID);
+    assert.deepEqual(k[0].map((b) => b.callback_data), [`nt:rm:${ID}`, "ctl:view:notes"]);
+    assert.deepEqual(k[1].map((b) => b.callback_data), [`nt:pin:${notes[1].id}`, `nt:del:${notes[1].id}`]);
+    const t = notesText(notes, { max: 12, waiting: 2 });
+    assert.match(t, /^📝 <b>편집 노트<\/b> 2\/12 · 고친 초안 2건 대기/);
+    assert.match(t, /1\. 📌 기사 끝을 &lt;전망&gt;으로 맺지 않는다\. <i>— 모든 초안 · 직접 씀<\/i>/);
+    assert.match(t, /2\. 정부 발표 기사는 제목에 수치를 앞세운다\. <i>— 경제 · 근거 4건 · 곧 빠짐<\/i>/);
+  });
+
+  it("reads /note with an optional beat", () => {
+    assert.deepEqual(parseNoteCommand("/note 경제: 정부 발표는 제목에 수치를 앞세운다"), { text: "정부 발표는 제목에 수치를 앞세운다", scope: "beat:economy" });
+    assert.deepEqual(parseNoteCommand("/note 크립토：상장 기사는 거래 개시 시각을 쓴다"), { text: "상장 기사는 거래 개시 시각을 쓴다", scope: "beat:crypto" });
+    assert.deepEqual(parseNoteCommand("/note AI: 모델 이름은 원어를 병기한다"), { text: "모델 이름은 원어를 병기한다", scope: "beat:ai" });
+    assert.deepEqual(parseNoteCommand("/note 제목은 40자 안쪽으로 쓴다"), { text: "제목은 40자 안쪽으로 쓴다", scope: "all" });
+    assert.deepEqual(parseNoteCommand("/note 비율: 숫자는 %로 쓴다"), { text: "비율: 숫자는 %로 쓴다", scope: "all" }, "an unknown prefix is part of the note");
+    assert.deepEqual(parseNoteCommand("/note"), { text: "", scope: "all" });
+    assert.equal(parseNoteCommand("/notes"), null);
+    assert.equal(parseNoteCommand("노트 아님"), null);
+  });
+
+  it("says so when collection is paused", () => {
+    const t = statusText({ ...((): StatusSnapshot => ({ workerBeatAt: new Date().toISOString(), ingestPaused: true, sources: { active: 1, paused: 0, error: 0, failing: [] }, items: { hour: 0, day: 0, lastCheckAt: null, lastNewAt: null }, desk: { enabled: true, cadenceMin: 60, dailyDrafts: 10, draftedToday: 0, queued: 0, lastRun: null, spendUsd: 0, budgetUsd: 40, allUsd: 0, capUsd: 50 }, newsroom: { review: 0, scheduled: 0, publishedToday: 0 }, lessons: { notes: 0, waiting: 0 } }))() }, new Date());
+    assert.match(t, /^<b>수집<\/b> ⏸ 일시정지 중 — 수집과 AI 데스크가 멈춰 있습니다$/m);
   });
 });

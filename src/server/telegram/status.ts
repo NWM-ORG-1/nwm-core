@@ -8,6 +8,7 @@ import { kstDayStart } from "../desk/score";
 import { loadDeskSettings } from "../desk/settings";
 import { draftGeneratorConfig } from "../generator/config";
 import { aiMonthSpendUsd } from "../generator/ledger";
+import { ingestPaused } from "../ops";
 import type { StatusSnapshot } from "./format";
 
 /** What /status reports: the worker, the collectors, the AI desk and the newsroom queue, read straight from the database. */
@@ -18,8 +19,9 @@ const FAILING_RUNS = 3;
 
 export async function loadStatus(db: DB, now = new Date()): Promise<StatusSnapshot> {
   const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
-  const [beat, byStatus, failing, items, lastCheck, settings, drafted, queued, lastRun, deskUsd, allUsd, queue, publishedToday, notes, waiting] = await Promise.all([
+  const [beat, paused, byStatus, failing, items, lastCheck, settings, drafted, queued, lastRun, deskUsd, allUsd, queue, publishedToday, notes, waiting] = await Promise.all([
     db.query.siteSettings.findFirst({ where: eq(siteSettings.key, "worker.heartbeat") }),
+    ingestPaused(db),
     db.select({ status: feedSources.status, n: count() }).from(feedSources).groupBy(feedSources.status),
     db
       .select({ name: feedSources.name, error: feedSources.lastError, lastSuccessAt: feedSources.lastSuccessAt })
@@ -61,6 +63,7 @@ export async function loadStatus(db: DB, now = new Date()): Promise<StatusSnapsh
   const run = lastRun[0];
   return {
     workerBeatAt: (beat?.value as { at?: string } | undefined)?.at ?? null,
+    ingestPaused: paused,
     sources: {
       active: statusCount("active"),
       paused: statusCount("paused"),

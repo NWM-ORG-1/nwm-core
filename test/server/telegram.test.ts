@@ -3,9 +3,10 @@ import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import { closeDb, db } from "@/db/client";
-import { activityLog, articles, candidateItems, candidates, feedItems, feedSources, staff, telegramLinks, telegramMessages } from "@/db/schema";
+import { activityLog, articles, candidateItems, candidates, deskLessons, feedItems, feedSources, siteSettings, staff, telegramLinks, telegramMessages } from "@/db/schema";
 import type { Draft } from "@/lib/content/blocks";
 import { confirmLegalAs, publishAs, saveDraftAs } from "@/server/candidate-ops";
+import { loadDeskSettings } from "@/server/desk/settings";
 import type { PublishResult } from "@/server/newsroom";
 import type { TgClient } from "@/server/telegram/api";
 import { handleUpdate, type BotDeps, type TgUpdate } from "@/server/telegram/bot";
@@ -320,6 +321,112 @@ describe("newsroom bot", { skip: !enabled && "DATABASE_URL not set" }, () => {
     const cand = await db.query.candidates.findFirst({ where: eq(candidates.id, id) });
     assert.equal(cand?.status, "review");
     assert.equal(cand?.checks.find((c) => c.id === "legal")?.ok ?? false, false);
+  });
+
+  it("pauses and resumes from the /status panel, and turns the desk and card alerts off", async () => {
+    const saved = await db.select().from(siteSettings).where(inArray(siteSettings.key, ["desk", "ingest"]));
+    try {
+      let mark = fake.calls.length;
+      await handleUpdate(deps(), msg(USER, "/status"));
+      const panel = fake.since(mark).find((c) => c.method === "sendMessage")!;
+      const id = sentId(panel);
+      const lastEdit = () => [...fake.calls].reverse().find((c) => c.method === "editMessageText")!;
+      const ingest = async () => (await db.query.siteSettings.findFirst({ where: eq(siteSettings.key, "ingest") }))?.value as { paused?: boolean } | undefined;
+
+      await handleUpdate(deps(), press(USER, "ctl:ingest:off", id));
+      assert.equal((await ingest())?.paused, true);
+      assert.match(lastEdit().params.text!, /⏸ 일시정지 중/);
+      assert.ok(buttons(lastEdit()).includes("ctl:ingest:on"), "the button flips");
+      await handleUpdate(deps(), press(USER, "ctl:ingest:on", id));
+      assert.equal((await ingest())?.paused, false);
+
+      await handleUpdate(deps(), press(USER, "ctl:desk:off", id));
+      assert.equal((await loadDeskSettings(db)).enabled, false);
+      assert.match(lastEdit().params.text!, /<b>AI 데스크<\/b> 꺼짐/);
+      await handleUpdate(deps(), press(USER, "ctl:notify:off", id));
+      assert.equal((await db.query.telegramLinks.findFirst({ where: eq(telegramLinks.tgUserId, USER) }))?.notify, false);
+      assert.ok(buttons(lastEdit()).includes("ctl:notify:on"));
+      await handleUpdate(deps(), press(USER, "ctl:notify:on", id));
+
+      const logs = await db
+        .select()
+        .from(activityLog)
+        .where(and(eq(activityLog.actorId, editorId), eq(activityLog.entityId, "ingest")))
+        .orderBy(activityLog.id);
+      assert.deepEqual(
+        logs.map((l) => [l.summary, (l.meta as { via?: string }).via]),
+        [
+          ["전체 수집 일시정지", "telegram"],
+          ["전체 수집 재개", "telegram"],
+        ],
+      );
+
+      mark = fake.calls.length;
+      await handleUpdate(deps(), press(STRANGER, "ctl:ingest:off", id));
+      assert.equal(fake.since(mark)[0].params.text, NOT_LINKED.slice(0, 190));
+      assert.equal((await ingest())?.paused, false);
+    } finally {
+      await db.delete(siteSettings).where(inArray(siteSettings.key, ["desk", "ingest"]));
+      if (saved.length) await db.insert(siteSettings).values(saved);
+    }
+  });
+
+  it("changes the desk's settings from /settings", async () => {
+    const saved = await db.select().from(siteSettings).where(eq(siteSettings.key, "desk"));
+    try {
+      const before = await loadDeskSettings(db);
+      const mark = fake.calls.length;
+      await handleUpdate(deps(), msg(USER, "/settings"));
+      const panel = fake.since(mark).find((c) => c.method === "sendMessage")!;
+      assert.match(panel.params.text!, /^⚙️ <b>AI 데스크 설정<\/b>/);
+      const id = sentId(panel);
+      await handleUpdate(deps(), press(USER, "set:daily:15", id));
+      await handleUpdate(deps(), press(USER, "set:cadence:120", id));
+      await handleUpdate(deps(), press(USER, before.minScore >= 95 ? "set:min:-5" : "set:min:+5", id));
+      const after = await loadDeskSettings(db);
+      assert.equal(after.dailyDrafts, 15);
+      assert.equal(after.cadenceMin, 120);
+      assert.equal(after.minScore, before.minScore + (before.minScore >= 95 ? -5 : 5));
+      const redraw = [...fake.calls].reverse().find((c) => c.method === "editMessageText")!;
+      assert.match(redraw.params.text!, /하루 초안 15건/);
+      assert.ok(buttons(redraw).includes("set:daily:15"));
+    } finally {
+      await db.delete(siteSettings).where(eq(siteSettings.key, "desk"));
+      if (saved.length) await db.insert(siteSettings).values(saved);
+    }
+  });
+
+  it("adds a 편집 노트 with /note, and pins or deletes it from /notes", async () => {
+    const saved = await db.select().from(deskLessons);
+    await db.delete(deskLessons);
+    try {
+      let mark = fake.calls.length;
+      await handleUpdate(deps(), msg(USER, "/note 경제: 정부 발표 기사는 제목에 핵심 수치를 앞세운다"));
+      assert.match(fake.since(mark)[0].params.text!, /^노트를 추가했습니다 \(경제 · 고정 · 1\/12\)/);
+      const [note] = await db.select().from(deskLessons);
+      assert.deepEqual([note.text, note.scope, note.pinned, note.origin], ["정부 발표 기사는 제목에 핵심 수치를 앞세운다", "beat:economy", true, "editor"]);
+
+      mark = fake.calls.length;
+      await handleUpdate(deps(), msg(USER, "/notes"));
+      const panel = fake.since(mark).find((c) => c.method === "sendMessage")!;
+      assert.match(panel.params.text!, /1\. 📌 정부 발표 기사는/);
+      const id = sentId(panel);
+      await handleUpdate(deps(), press(USER, `nt:unpin:${note.id}`, id));
+      assert.equal((await db.query.deskLessons.findFirst({ where: eq(deskLessons.id, note.id) }))?.pinned, false);
+
+      await handleUpdate(deps(), press(USER, `nt:del:${note.id}`, id));
+      assert.ok(await db.query.deskLessons.findFirst({ where: eq(deskLessons.id, note.id) }), "the first tap only asks");
+      assert.ok(buttons([...fake.calls].reverse().find((c) => c.method === "editMessageText")!).includes(`nt:rm:${note.id}`));
+      await handleUpdate(deps(), press(USER, `nt:rm:${note.id}`, id));
+      assert.equal(await db.query.deskLessons.findFirst({ where: eq(deskLessons.id, note.id) }), undefined);
+
+      mark = fake.calls.length;
+      await handleUpdate(deps(), msg(USER, "/note"));
+      assert.match(fake.since(mark)[0].params.text!, /노트 내용을 함께 보내 주세요/);
+    } finally {
+      await db.delete(deskLessons);
+      if (saved.length) await db.insert(deskLessons).values(saved);
+    }
   });
 
   it("answers /status for a linked editor only", async () => {

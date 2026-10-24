@@ -229,13 +229,19 @@ export const HELP = [
   "• ✅ 발행: 법률 검토를 확인하고 바로 발행합니다.",
   "• ✏️ 수정: 답장으로 고칠 내용을 보내면 반영한 새 카드를 보냅니다.",
   "• 🗑 반려: 사유를 고르거나 적습니다.",
-  "/status 수집·AI 데스크·뉴스룸 상태",
+  "/status 수집·AI 데스크·뉴스룸 상태 (버튼으로 일시정지·재개)",
+  "/settings AI 데스크 설정 (하루 초안 수·간격·쓰기 방식·기준 점수)",
+  "/notes 편집 노트 보기·고정·삭제",
+  "/note 경제: … 편집 노트 추가 (분야는 생략 가능)",
   "/stop 연결 끊기",
 ].join("\n");
 
 /** The bot's command menu in Telegram (setMyCommands). */
 export const BOT_COMMANDS = [
-  { command: "status", description: "수집·AI 데스크·뉴스룸 상태" },
+  { command: "status", description: "수집·AI 데스크·뉴스룸 상태와 켜고 끄기" },
+  { command: "settings", description: "AI 데스크 설정" },
+  { command: "notes", description: "편집 노트 보기·고정·삭제" },
+  { command: "note", description: "편집 노트 추가 (/note 경제: …)" },
   { command: "help", description: "도움말" },
   { command: "stop", description: "연결 끊기" },
 ];
@@ -244,6 +250,8 @@ export const BOT_COMMANDS = [
 
 export interface StatusSnapshot {
   workerBeatAt: string | null;
+  /** the newsroom's kill switch: no collection and no periodic jobs */
+  ingestPaused: boolean;
   sources: { active: number; paused: number; error: number; failing: Array<{ name: string; error: string | null; lastSuccessAt: string | null }> };
   items: { hour: number; day: number; lastCheckAt: string | null; lastNewAt: string | null };
   desk: {
@@ -284,7 +292,8 @@ export function statusText(s: StatusSnapshot, now: Date): string {
   lines.push(alive ? `<b>워커</b> ✅ 정상 · 신호 ${ago(s.workerBeatAt, now)}` : `<b>워커</b> ⚠️ 신호 없음 · 마지막 ${ago(s.workerBeatAt, now)} — Railway worker 서비스를 확인하세요`);
 
   const src = s.sources;
-  lines.push(`<b>수집</b> 소스 ${src.active}개 작동${src.error ? ` · ⚠️ 오류 ${src.error}` : ""}${src.paused ? ` · 쉼 ${src.paused}` : ""}`);
+  if (s.ingestPaused) lines.push("<b>수집</b> ⏸ 일시정지 중 — 수집과 AI 데스크가 멈춰 있습니다");
+  else lines.push(`<b>수집</b> 소스 ${src.active}개 작동${src.error ? ` · ⚠️ 오류 ${src.error}` : ""}${src.paused ? ` · 쉼 ${src.paused}` : ""}`);
   lines.push(` 새 자료 1시간 ${s.items.hour}건 · 24시간 ${s.items.day}건 · 마지막 확인 ${ago(s.items.lastCheckAt, now)}`);
   for (const f of src.failing.slice(0, 3)) {
     lines.push(` ⚠️ ${escapeHtml(f.name)} — ${escapeHtml(clipLine(f.error ?? "오류", 80))} (마지막 성공 ${ago(f.lastSuccessAt, now)})`);
@@ -314,3 +323,143 @@ function clipLine(t: string, max: number): string {
 }
 
 export const NOT_LINKED = "연결되지 않은 텔레그램 계정입니다. 뉴스룸 → 설정 → 텔레그램에서 연결 링크를 만들어 여세요.";
+
+/* ───────────────────────── control panels ───────────────────────── */
+
+const btn = (text: string, data: string) => ({ text, callback_data: data });
+
+/** Under /status: the switches an editor reaches for most. */
+export function statusKeyboard(s: Pick<StatusSnapshot, "ingestPaused" | "desk">, notify: boolean): InlineKeyboard {
+  return [
+    [s.desk.enabled ? btn("⏸ AI 데스크 끄기", "ctl:desk:off") : btn("▶️ AI 데스크 켜기", "ctl:desk:on"), btn("🔄 지금 실행", "ctl:run")],
+    [s.ingestPaused ? btn("▶️ 수집 재개", "ctl:ingest:on") : btn("⏸ 수집 일시정지", "ctl:ingest:off"), notify ? btn("🔕 카드 알림 끄기", "ctl:notify:off") : btn("🔔 카드 알림 켜기", "ctl:notify:on")],
+    [btn("⚙️ 설정", "ctl:view:settings"), btn("📝 편집 노트", "ctl:view:notes"), btn("↻ 새로고침", "ctl:view:status")],
+  ];
+}
+
+export interface SettingsView {
+  enabled: boolean;
+  dailyDrafts: number;
+  cadenceMin: number;
+  pacing: "immediate" | "spread";
+  minScore: number;
+  monthlyBudgetUsd: number;
+}
+
+export const DAILY_OPTIONS = [5, 10, 15, 20] as const;
+export const CADENCE_OPTIONS = [30, 60, 120, 240] as const;
+const cadenceLabel = (m: number) => (m < 60 ? `${m}분` : `${m / 60}시간`);
+
+export function settingsText(s: SettingsView): string {
+  return [
+    "⚙️ <b>AI 데스크 설정</b>",
+    `${s.enabled ? "켜짐" : "꺼짐"} · ${cadenceLabel(s.cadenceMin)}마다 · ${s.pacing === "immediate" ? "기준을 넘으면 바로 쓰기" : "07–23시에 나눠 쓰기"}`,
+    `하루 초안 ${s.dailyDrafts}건 · 기준 점수 ${s.minScore} · 이번 달 예산 $${s.monthlyBudgetUsd}`,
+    "",
+    "누르면 바로 저장되고 다음 실행부터 반영됩니다. 예산·모델은 뉴스룸 → AI 데스크에서 바꿉니다.",
+  ].join("\n");
+}
+
+export function settingsKeyboard(s: SettingsView): InlineKeyboard {
+  const mark = (on: boolean, label: string) => (on ? `✓ ${label}` : label);
+  return [
+    DAILY_OPTIONS.map((n) => btn(mark(s.dailyDrafts === n, `하루 ${n}건`), `set:daily:${n}`)),
+    CADENCE_OPTIONS.map((m) => btn(mark(s.cadenceMin === m, cadenceLabel(m)), `set:cadence:${m}`)),
+    [btn(mark(s.pacing === "immediate", "바로 쓰기"), "set:pacing:immediate"), btn(mark(s.pacing === "spread", "나눠 쓰기"), "set:pacing:spread")],
+    [btn(`기준 −5 (${Math.max(0, s.minScore - 5)})`, "set:min:-5"), btn(`기준 +5 (${Math.min(100, s.minScore + 5)})`, "set:min:+5")],
+    [s.enabled ? btn("⏸ AI 데스크 끄기", "set:enabled:off") : btn("▶️ AI 데스크 켜기", "set:enabled:on"), btn("← 상태", "ctl:view:status")],
+  ];
+}
+
+export interface NoteView {
+  id: string;
+  text: string;
+  scopeLabel: string;
+  hits: number;
+  pinned: boolean;
+  origin: string;
+  fading: boolean;
+}
+
+export function notesText(notes: NoteView[], o: { max: number; waiting: number }): string {
+  const lines = [`📝 <b>편집 노트</b> ${notes.length}/${o.max} · 고친 초안 ${o.waiting}건 대기`, ""];
+  if (!notes.length) lines.push("아직 노트가 없습니다. 고쳐서 발행한 초안이 쌓이면 AI가 정리하고, 직접 추가할 수도 있습니다.");
+  notes.forEach((n, i) => {
+    const meta = [n.scopeLabel, n.origin === "editor" ? "직접 씀" : `근거 ${n.hits}건`, n.fading ? "곧 빠짐" : ""].filter(Boolean).join(" · ");
+    lines.push(`${i + 1}. ${n.pinned ? "📌 " : ""}${escapeHtml(n.text)} <i>— ${escapeHtml(meta)}</i>`);
+  });
+  lines.push("", "추가: <code>/note 경제: 정부 발표 기사는 제목에 핵심 수치를 앞세운다</code> (분야는 빼면 모든 초안)");
+  return lines.join("\n");
+}
+
+/** One row per note (pin / delete); a delete asks once more in place. */
+export function notesKeyboard(notes: Array<Pick<NoteView, "id" | "pinned">>, confirmId?: string): InlineKeyboard {
+  const rows: InlineKeyboard = notes.map((n, i) =>
+    n.id === confirmId
+      ? [btn(`${i + 1}번 정말 지우기`, `nt:rm:${n.id}`), btn("취소", "ctl:view:notes")]
+      : [btn(n.pinned ? `${i + 1} 📌 고정 해제` : `${i + 1} 📌 고정`, `nt:${n.pinned ? "unpin" : "pin"}:${n.id}`), btn(`${i + 1} 🗑 지우기`, `nt:del:${n.id}`)],
+  );
+  rows.push([btn("🧹 AI 정리 요청", "nt:review"), btn("← 상태", "ctl:view:status")]);
+  return rows;
+}
+
+export type Control =
+  | { kind: "desk"; on: boolean }
+  | { kind: "run" }
+  | { kind: "ingest"; on: boolean }
+  | { kind: "notify"; on: boolean }
+  | { kind: "view"; view: "status" | "settings" | "notes" }
+  | { kind: "set"; patch: { dailyDrafts: number } | { cadenceMin: number } | { pacing: "immediate" | "spread" } | { enabled: boolean } }
+  | { kind: "min"; delta: 5 | -5 }
+  | { kind: "note"; op: "pin" | "unpin" | "del" | "rm"; id: string }
+  | { kind: "review" };
+
+/** Buttons of the control panels (ctl: / set: / nt:); anything else is a card button or nothing. */
+export function parseControl(data: string | undefined): Control | null {
+  const [group, a, b] = (data ?? "").split(":");
+  const onOff = (v: string | undefined) => (v === "on" ? true : v === "off" ? false : null);
+  if (group === "ctl") {
+    if (a === "run") return { kind: "run" };
+    if (a === "view") return b === "status" || b === "settings" || b === "notes" ? { kind: "view", view: b } : null;
+    const on = onOff(b);
+    if (on == null) return null;
+    if (a === "desk" || a === "ingest" || a === "notify") return { kind: a, on };
+    return null;
+  }
+  if (group === "set") {
+    const n = Number(b);
+    if (a === "daily") return (DAILY_OPTIONS as readonly number[]).includes(n) ? { kind: "set", patch: { dailyDrafts: n } } : null;
+    if (a === "cadence") return (CADENCE_OPTIONS as readonly number[]).includes(n) ? { kind: "set", patch: { cadenceMin: n } } : null;
+    if (a === "pacing") return b === "immediate" || b === "spread" ? { kind: "set", patch: { pacing: b } } : null;
+    if (a === "enabled") {
+      const on = onOff(b);
+      return on == null ? null : { kind: "set", patch: { enabled: on } };
+    }
+    if (a === "min") return b === "+5" ? { kind: "min", delta: 5 } : b === "-5" ? { kind: "min", delta: -5 } : null;
+    return null;
+  }
+  if (group === "nt") {
+    if (a === "review") return { kind: "review" };
+    if ((a === "pin" || a === "unpin" || a === "del" || a === "rm") && b && UUID.test(b)) return { kind: "note", op: a, id: b };
+    return null;
+  }
+  return null;
+}
+
+const NOTE_SCOPES: Record<string, string> = Object.fromEntries([
+  ...Object.values(BEATS).map((b) => [b.label.toLowerCase(), `beat:${b.id}`]),
+  ...Object.values(BEATS).map((b) => [b.id, `beat:${b.id}`]),
+  ["센티먼트", "beat:sentiment"],
+  ["전체", "all"],
+  ["모든 초안", "all"],
+]);
+
+/** "/note 경제: 정부 발표는 …" → a note for the economy beat; without a known prefix, for every draft. */
+export function parseNoteCommand(text: string): { text: string; scope: string } | null {
+  const m = /^\/note(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(text.trim());
+  if (!m) return null;
+  const body = (m[1] ?? "").trim();
+  const p = /^([^:：\n]{1,10})\s*[:：]\s*([\s\S]+)$/.exec(body);
+  const scope = p ? NOTE_SCOPES[p[1].trim().toLowerCase()] : undefined;
+  return scope ? { text: p![2].trim(), scope } : { text: body, scope: "all" };
+}

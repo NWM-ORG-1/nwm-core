@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, ne } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { articles, candidates, staff, telegramMessages, type Beat, type CandidateStatus, type CheckResult } from "@/db/schema";
+import { articles, candidates, staff, telegramLinks, telegramMessages, type Beat, type CandidateStatus, type CheckResult } from "@/db/schema";
 import { draftSchema, type Draft } from "@/lib/content/blocks";
 import { clockKST, dateTimeKST } from "@/lib/format";
 import { logActivity } from "../activity";
@@ -10,7 +10,10 @@ import { confirmLegalAs, noteInstruction, publishAs, rejectAs, saveDraftAs } fro
 import { blockingFailures } from "../checks";
 import { revisable } from "../generator/claude";
 import type { GenItem } from "../generator/types";
+import { countPendingCases, lessonWeight, loadLessons, MAX_LESSONS, scopeLabel } from "../desk/lessons";
+import { loadDeskSettings } from "../desk/settings";
 import { computeChecks, isPlaceholderStaff, loadCandidateItems, NewsroomError, toGenItem, type PublishResult } from "../newsroom";
+import { addLessonAs, deleteLessonAs, requestDeskRunAs, requestLessonReviewAs, saveDeskSettingsAs, setIngestPausedAs, setLessonPinnedAs } from "../ops";
 import { unchanged, type InlineKeyboard, type TgClient } from "./api";
 import {
   ASK_EDIT,
@@ -23,10 +26,18 @@ import {
   NOT_LINKED,
   parseCallback,
   parseQuickEdits,
+  notesKeyboard,
+  notesText,
+  parseControl,
+  parseNoteCommand,
   REJECT_REASONS,
+  settingsKeyboard,
+  settingsText,
+  statusKeyboard,
   statusText,
   type CardInput,
   type CardOutcome,
+  type Control,
 } from "./format";
 import { linkedEditor, linkWithCode, unlinkTelegram } from "./links";
 import { loadStatus } from "./status";
@@ -281,6 +292,91 @@ async function onEdit(d: BotDeps, me: StaffRow, chatId: number, c: Card, text: s
   };
 }
 
+/* ───────────────────────── control panels ───────────────────────── */
+
+type Panel = "status" | "settings" | "notes";
+
+async function panel(d: BotDeps, me: StaffRow, view: Panel, confirmId?: string): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const now = new Date();
+  if (view === "status") {
+    const [s, link] = await Promise.all([loadStatus(d.db, now), d.db.query.telegramLinks.findFirst({ where: eq(telegramLinks.staffId, me.id) })]);
+    return { text: statusText(s, now), keyboard: statusKeyboard(s, link?.notify ?? true) };
+  }
+  if (view === "settings") {
+    const s = await loadDeskSettings(d.db);
+    return { text: settingsText(s), keyboard: settingsKeyboard(s) };
+  }
+  const [lessons, waiting] = await Promise.all([loadLessons(d.db), countPendingCases(d.db)]);
+  const notes = lessons
+    .sort((x, y) => lessonWeight(y, now) - lessonWeight(x, now))
+    .map((l) => ({ id: l.id, text: l.text, scopeLabel: scopeLabel(l.scope), hits: l.hits, pinned: l.pinned, origin: l.origin, fading: !l.pinned && lessonWeight(l, now) < 1 }));
+  return { text: notesText(notes, { max: MAX_LESSONS, waiting }), keyboard: notesKeyboard(notes, confirmId) };
+}
+
+/** Sends a panel, or redraws the one whose button was pressed. */
+async function showPanel(d: BotDeps, me: StaffRow, chatId: number, view: Panel, messageId?: number, confirmId?: string): Promise<void> {
+  const p = await panel(d, me, view, confirmId);
+  if (messageId) await editCard(d, chatId, messageId, p.text, p.keyboard);
+  else await send(d, chatId, p.text, { reply_markup: { inline_keyboard: p.keyboard } });
+}
+
+async function onControl(d: BotDeps, me: StaffRow, chatId: number, messageId: number, c: Control, answer: (text?: string, alert?: boolean) => Promise<unknown>): Promise<void> {
+  try {
+    switch (c.kind) {
+      case "view":
+        await answer();
+        return await showPanel(d, me, chatId, c.view, messageId);
+      case "desk":
+        await saveDeskSettingsAs(d.db, me, { enabled: c.on }, "telegram");
+        await answer(c.on ? "AI 데스크를 켰습니다." : "AI 데스크를 껐습니다. 수집은 계속됩니다.");
+        return await showPanel(d, me, chatId, "status", messageId);
+      case "run":
+        await requestDeskRunAs(d.db, me, "telegram");
+        return void (await answer("요청했습니다. 워커가 1분 안에 한 번 실행합니다 (꺼져 있어도 한 번 돕니다)."));
+      case "ingest":
+        await setIngestPausedAs(d.db, me, !c.on, "telegram");
+        await answer(c.on ? "수집을 다시 시작합니다." : "수집과 AI 데스크를 멈췄습니다 (30초 안에 반영). 카드 알림은 계속 옵니다.");
+        return await showPanel(d, me, chatId, "status", messageId);
+      case "notify":
+        await d.db.update(telegramLinks).set({ notify: c.on }).where(eq(telegramLinks.staffId, me.id));
+        await logActivity(d.db, { actorId: me.id, kind: "settings", entityType: "settings", entityId: "telegram", summary: c.on ? "텔레그램 카드 알림 켬" : "텔레그램 카드 알림 끔", meta: { via: "telegram" } });
+        await answer(c.on ? "새 초안 카드를 다시 보냅니다." : "새 초안 카드를 보내지 않습니다. /status 에서 다시 켤 수 있습니다.");
+        return await showPanel(d, me, chatId, "status", messageId);
+      case "set":
+        await saveDeskSettingsAs(d.db, me, c.patch, "telegram");
+        await answer("저장했습니다. 다음 실행부터 반영됩니다.");
+        return await showPanel(d, me, chatId, "settings", messageId);
+      case "min": {
+        const s = await loadDeskSettings(d.db);
+        const minScore = Math.min(100, Math.max(0, s.minScore + c.delta));
+        await saveDeskSettingsAs(d.db, me, { minScore }, "telegram");
+        await answer(`기준 점수 ${minScore}`);
+        return await showPanel(d, me, chatId, "settings", messageId);
+      }
+      case "note":
+        if (c.op === "del") {
+          await answer("한 번 더 누르면 지웁니다.");
+          return await showPanel(d, me, chatId, "notes", messageId, c.id);
+        }
+        if (c.op === "rm") {
+          await deleteLessonAs(d.db, me, c.id, "telegram");
+          await answer("지웠습니다.");
+        } else {
+          await setLessonPinnedAs(d.db, me, c.id, c.op === "pin", "telegram");
+          await answer(c.op === "pin" ? "고정했습니다. 이 노트는 빠지지 않습니다." : "고정을 풀었습니다. 근거가 끊기면 저절로 빠집니다.");
+        }
+        return await showPanel(d, me, chatId, "notes", messageId);
+      case "review":
+        await requestLessonReviewAs(d.db, me, "telegram");
+        await answer("요청했습니다. 1시간 안에 쌓인 수정 사례를 읽고 정리합니다.");
+        return await showPanel(d, me, chatId, "notes", messageId);
+    }
+  } catch (e) {
+    if (!(e instanceof NewsroomError)) console.error("[telegram] control failed:", e instanceof Error ? e.message : e);
+    await answer(e instanceof NewsroomError ? e.message : "처리하지 못했습니다. 잠시 후 다시 시도하세요.", true);
+  }
+}
+
 /* ───────────────────────── updates ───────────────────────── */
 
 export async function handleUpdate(d: BotDeps, u: TgUpdate): Promise<Later | null> {
@@ -295,6 +391,12 @@ async function onCallback(d: BotDeps, q: TgCallback): Promise<Later | null> {
   const editor = await linkedEditor(d.db, q.from.id);
   if (!editor) {
     await answer(NOT_LINKED, true);
+    return null;
+  }
+  const ctl = parseControl(q.data);
+  if (ctl) {
+    if (q.message) await onControl(d, editor.me, q.message.chat.id, q.message.message_id, ctl, answer);
+    else await answer();
     return null;
   }
   const a = parseCallback(q.data);
@@ -418,8 +520,29 @@ async function onMessage(d: BotDeps, m: TgMessage): Promise<Later | null> {
     return null;
   }
   if (/^\/status(@\w+)?$/.test(text) || text === "상태") {
-    const now = new Date();
-    await send(d, chatId, statusText(await loadStatus(d.db, now), now));
+    await showPanel(d, me, chatId, "status");
+    return null;
+  }
+  if (/^\/settings(@\w+)?$/.test(text) || text === "설정") {
+    await showPanel(d, me, chatId, "settings");
+    return null;
+  }
+  if (/^\/notes(@\w+)?$/.test(text) || text === "노트") {
+    await showPanel(d, me, chatId, "notes");
+    return null;
+  }
+  const note = parseNoteCommand(text);
+  if (note) {
+    if (!note.text) {
+      await send(d, chatId, "노트 내용을 함께 보내 주세요. 예: <code>/note 경제: 정부 발표 기사는 제목에 핵심 수치를 앞세운다</code>");
+      return null;
+    }
+    try {
+      const r = await addLessonAs(d.db, me, note, "telegram");
+      await send(d, chatId, `노트를 추가했습니다 (${escapeHtml(scopeLabel(r.scope))} · 고정 · ${r.total}/${MAX_LESSONS}). 다음 초안부터 반영됩니다. /notes 로 목록을 봅니다.`);
+    } catch (e) {
+      await send(d, chatId, escapeHtml(e instanceof NewsroomError ? e.message : "추가하지 못했습니다. 잠시 후 다시 시도하세요."));
+    }
     return null;
   }
 
