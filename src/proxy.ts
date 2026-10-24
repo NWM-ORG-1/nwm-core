@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { adminConfigured, verifyBasicAuth } from "@/server/credentials";
 import { clientIp, WindowCounter } from "@/server/rate-limit";
+import { readSession, SESSION_COOKIE, sessionBotToken } from "@/server/telegram/session";
 
 /**
- * Basic Auth for the newsroom (/admin). With SITE_LOCK=1 the whole site is
- * locked the same way (until 인터넷신문 registration is complete).
+ * Basic Auth for the newsroom (/admin), or the signed session the newsroom
+ * bot's Mini App sets (server/telegram/session.ts). With SITE_LOCK=1 the whole
+ * site is locked the same way (until 인터넷신문 registration is complete).
  * Server Actions re-verify credentials themselves — this is not the only guard.
  */
 
@@ -36,6 +38,14 @@ export async function proxy(req: NextRequest) {
   }
 
   if (!adminConfigured()) return deny(503, "ADMIN_USERS is not configured.");
+
+  // opened from the newsroom bot's Mini App (편집기): a signed session instead of the password;
+  // requireStaff() checks the link, the editor and the login again on every load and action
+  if (isAdmin && readSession(req.cookies.get(SESSION_COOKIE)?.value, sessionBotToken())) {
+    const res = NextResponse.next();
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
+  }
 
   const ip = clientIp(req.headers);
   if (failures.count(ip) >= MAX_FAILURES) return deny(429, "Too many attempts. Try again later.");

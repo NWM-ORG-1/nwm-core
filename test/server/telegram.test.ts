@@ -14,6 +14,8 @@ import { NOT_LINKED } from "@/server/telegram/format";
 import { createLinkCode } from "@/server/telegram/links";
 import { telegramTick } from "@/server/telegram/notify";
 import { makeTicket, readTicket, TICKET_SEC, verifyInitData } from "@/server/telegram/webapp";
+import { makeSession, readSession, SESSION_SEC } from "@/server/telegram/session";
+import { staffFromTelegramSession } from "@/server/auth";
 import { POST as miniAppSignIn } from "@/app/api/telegram/webapp/route";
 
 /**
@@ -164,6 +166,16 @@ describe("Telegram Mini App sign-in", () => {
     assert.equal(verifyInitData("auth_date=1&user=%7B%7D", TOKEN, now), null, "no hash");
   });
 
+  it("signs a newsroom session for twelve hours that only this server can make", () => {
+    const session = makeSession({ tgUserId: USER, staffId: EDITOR }, TOKEN, now);
+    assert.deepEqual(readSession(session, TOKEN, now), { tgUserId: USER, staffId: EDITOR, exp: at + SESSION_SEC });
+    assert.equal(readSession(session, TOKEN, new Date(now.getTime() + SESSION_SEC * 1000)), null, "expired");
+    assert.equal(readSession(session, "654321:another-bot", now), null, "signed by another key");
+    assert.equal(readSession(session.replace(`${USER}.`, `${STRANGER}.`), TOKEN, now), null, "another Telegram user");
+    assert.equal(readSession(session, null, now), null, "no bot configured");
+    assert.equal(readSession(makeTicket({ tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE }, TOKEN, now), TOKEN, now), null, "a preview ticket is not a session");
+  });
+
   it("issues a ticket for one draft, for minutes, that only this server can make", () => {
     const ticket = makeTicket({ tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE }, TOKEN, now);
     assert.deepEqual(readTicket(ticket, TOKEN, now), { tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE, exp: at + TICKET_SEC });
@@ -237,6 +249,52 @@ describe("newsroom bot", { skip: !enabled && "DATABASE_URL not set" }, () => {
     } finally {
       if (saved === undefined) delete process.env.NEWSROOM_TELEGRAM_BOT_TOKEN;
       else process.env.NEWSROOM_TELEGRAM_BOT_TOKEN = saved;
+    }
+  });
+
+  it("signs the linked editor into the newsroom from the 편집기 button, while the link and the login stand", async () => {
+    const id = await makeCandidate(licensed, "편");
+    await telegramTick({ db, tg: fake.tg, site: SITE, pauseMs: 0 });
+    const keys = (cardOf(id)!.params.reply_markup!.inline_keyboard ?? []).flat() as Array<{ text: string; web_app?: { url: string } }>;
+    assert.deepEqual(keys.find((b) => b.text === "🖊 편집기")?.web_app, { url: `${SITE}/tg/edit/${id}` });
+
+    const TOKEN = "123456:itest-bot-token";
+    const login = (name: string) => `${name}:00112233445566778899aabbccddeeff:${"ab".repeat(32)}`;
+    const saved = { token: process.env.NEWSROOM_TELEGRAM_BOT_TOKEN, users: process.env.ADMIN_USERS };
+    process.env.NEWSROOM_TELEGRAM_BOT_TOKEN = TOKEN;
+    process.env.ADMIN_USERS = login(`${PREFIX}editor`);
+    const ask = (initData: string) =>
+      miniAppSignIn(
+        new Request(`${SITE}/api/telegram/webapp`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+          body: JSON.stringify({ initData, candidateId: id, mode: "edit" }),
+        }) as Parameters<typeof miniAppSignIn>[0],
+      );
+    try {
+      const ok = await ask(initDataFor(USER, TOKEN));
+      assert.equal(ok.status, 200);
+      assert.deepEqual(await ok.json(), { next: `/admin/candidates/${id}` });
+      const cookie = ok.headers.get("set-cookie") ?? "";
+      for (const part of [/^nwm_tg=\d+\.[0-9a-f-]{36}\.\d{10}\.[A-Za-z0-9_-]{43};/, /Path=\/admin/, /HttpOnly/, /SameSite=lax/i, new RegExp(`Max-Age=${SESSION_SEC}`)]) assert.match(cookie, part);
+      const value = /^nwm_tg=([^;]+)/.exec(cookie)![1];
+      assert.equal((await staffFromTelegramSession(value))?.id, editorId, "the newsroom knows the editor");
+
+      assert.equal(await staffFromTelegramSession(makeSession({ tgUserId: STRANGER, staffId: editorId }, TOKEN)), null, "signed, but not the linked account");
+      assert.equal(await staffFromTelegramSession(makeSession({ tgUserId: USER, staffId: placeholderId }, TOKEN)), null, "signed, but another editor");
+      assert.equal(await staffFromTelegramSession(undefined), null);
+
+      process.env.ADMIN_USERS = login("someone-else");
+      assert.equal(await staffFromTelegramSession(value), null, "a login taken out of ADMIN_USERS loses its Telegram sessions too");
+      assert.equal((await ask(initDataFor(USER, TOKEN))).status, 403, "and gets no new one");
+    } finally {
+      for (const [k, v] of [
+        ["NEWSROOM_TELEGRAM_BOT_TOKEN", saved.token],
+        ["ADMIN_USERS", saved.users],
+      ] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
     }
   });
 

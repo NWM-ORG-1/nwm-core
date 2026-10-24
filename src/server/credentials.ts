@@ -57,6 +57,11 @@ export function adminConfigured(): boolean {
   return loadCreds().length > 0;
 }
 
+/** A newsroom login that may still sign in — removing it from ADMIN_USERS also ends its Telegram sessions. */
+export function isConfiguredLogin(login: string): boolean {
+  return loadCreds().some((c) => c.login === login);
+}
+
 /*
  * Every admin request carries the header, and both the proxy and requireStaff() check it,
  * so verified headers are remembered briefly (keyed by a digest, never the header itself).

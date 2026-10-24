@@ -69,22 +69,26 @@ function mayTry(): boolean {
   return tries.n <= 3;
 }
 
-type GateState = { kind: "checking" } | { kind: "message"; text: string; retry: boolean };
-type Exchange = { ticket: string } | { text: string; retry: boolean };
+type GateState = { kind: "checking" } | { kind: "message"; text: string; retry: boolean; newWindow?: boolean };
+type Exchange = { go: string } | { text: string; retry: boolean; newWindow?: boolean };
+export type MiniAppMode = "preview" | "edit";
 
-const REOPEN = "텔레그램 봇 카드의 ‘미리보기’ 버튼으로 다시 열어 주세요.";
+const BUTTON: Record<MiniAppMode, string> = { preview: "미리보기", edit: "편집기" };
 
-async function ticketFor(candidateId: string, initData: string | null, auto: boolean): Promise<Exchange> {
-  if (!initData) return { text: `로그인 없이 보려면 ${REOPEN}`, retry: false };
+async function signIn(candidateId: string, mode: MiniAppMode, initData: string | null, auto: boolean): Promise<Exchange> {
+  if (!initData) return { text: `로그인 없이 열려면 텔레그램 봇 카드의 ‘${BUTTON[mode]}’ 버튼으로 다시 열어 주세요.`, retry: false };
+  // the newsroom refuses to be framed; Telegram Web shows Mini Apps in a frame
+  if (mode === "edit" && window.top !== window.self) return { text: "텔레그램 웹에서는 편집기를 이 안에서 열 수 없습니다. 새 창에서 로그인해 여세요.", retry: false, newWindow: true };
   if (auto && !mayTry()) return { text: "확인이 거듭 실패했습니다. 잠시 뒤 다시 시도해 주세요.", retry: true };
   try {
     const res = await fetch("/api/telegram/webapp", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ initData, candidateId }),
+      body: JSON.stringify({ initData, candidateId, mode }),
     });
-    const j = (await res.json().catch(() => ({}))) as { ticket?: string; error?: string };
-    if (res.ok && j.ticket) return { ticket: j.ticket };
+    const j = (await res.json().catch(() => ({}))) as { ticket?: string; next?: string; error?: string };
+    if (res.ok && mode === "preview" && j.ticket) return { go: `${window.location.pathname}?t=${encodeURIComponent(j.ticket)}` };
+    if (res.ok && mode === "edit" && j.next?.startsWith("/admin/")) return { go: j.next };
     // refused launch data (too old, another bot) is of no further use
     if (res.status === 401) session()?.removeItem(INIT_KEY);
     return { text: j.error ?? "확인하지 못했습니다. 잠시 뒤 다시 열어 주세요.", retry: res.status >= 500 };
@@ -93,28 +97,31 @@ async function ticketFor(candidateId: string, initData: string | null, auto: boo
   }
 }
 
-/** Trades Telegram's signed launch data for a ticket to this draft, then loads the preview with it. */
-export function MiniAppGate({ candidateId, adminHref }: { candidateId: string; adminHref: string }) {
+/**
+ * Trades Telegram's signed launch data for a way in: a ticket that loads this
+ * draft's preview, or (편집기) a newsroom session, then the editor.
+ */
+export function MiniAppGate({ candidateId, adminHref, mode = "preview" }: { candidateId: string; adminHref: string; mode?: MiniAppMode }) {
   const [state, setState] = useState<GateState>({ kind: "checking" });
 
   const settle = useCallback((r: Exchange) => {
-    if ("ticket" in r) window.location.replace(`${window.location.pathname}?t=${encodeURIComponent(r.ticket)}`);
-    else setState({ kind: "message", text: r.text, retry: r.retry });
+    if ("go" in r) window.location.replace(r.go);
+    else setState({ kind: "message", text: r.text, retry: r.retry, newWindow: r.newWindow });
   }, []);
 
   useEffect(() => {
     postEvent("web_app_ready");
     postEvent("web_app_expand");
     let live = true;
-    void ticketFor(candidateId, takeInitData(), true).then((r) => live && settle(r));
+    void signIn(candidateId, mode, takeInitData(), true).then((r) => live && settle(r));
     return () => {
       live = false;
     };
-  }, [candidateId, settle]);
+  }, [candidateId, mode, settle]);
 
   const retry = async () => {
     setState({ kind: "checking" });
-    settle(await ticketFor(candidateId, takeInitData(), false));
+    settle(await signIn(candidateId, mode, takeInitData(), false));
   };
 
   return (
@@ -130,7 +137,7 @@ export function MiniAppGate({ candidateId, adminHref }: { candidateId: string; a
                 다시 확인
               </button>
             )}
-            <a href={adminHref} className="text-[13px] font-semibold text-ice hover:underline">
+            <a href={adminHref} {...(state.newWindow ? { target: "_blank", rel: "noreferrer" } : {})} className="text-[13px] font-semibold text-ice hover:underline">
               뉴스룸에서 열기 (로그인)
             </a>
           </div>

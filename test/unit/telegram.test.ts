@@ -104,13 +104,16 @@ describe("telegram buttons", () => {
     assert.deepEqual(cardKeyboard({ candidateId: ID, lockVersion: 1, site }, "done"), []);
   });
 
-  it("opens the preview inside Telegram in a private chat, and the newsroom page elsewhere", () => {
+  it("opens the preview and the editor inside Telegram in a private chat, and the newsroom pages elsewhere", () => {
     const [, links] = cardKeyboard({ candidateId: ID, lockVersion: 1, site, miniApp: true }, "open");
     assert.deepEqual(links, [
       { text: "👁 미리보기", web_app: { url: `${site}/tg/preview/${ID}` } },
+      { text: "🖊 편집기", web_app: { url: `${site}/tg/edit/${ID}` } },
+    ]);
+    assert.deepEqual(cardKeyboard({ candidateId: ID, lockVersion: 1, site, miniApp: false }, "open")[1], [
+      { text: "👁 미리보기", url: `${site}/admin/candidates/${ID}/preview` },
       { text: "🖊 편집기", url: `${site}/admin/candidates/${ID}` },
     ]);
-    assert.deepEqual(cardKeyboard({ candidateId: ID, lockVersion: 1, site, miniApp: false }, "open")[1][0], { text: "👁 미리보기", url: `${site}/admin/candidates/${ID}/preview` });
   });
 
   it("reads 제목:/요약: replies as literal edits and anything else as an instruction", () => {
