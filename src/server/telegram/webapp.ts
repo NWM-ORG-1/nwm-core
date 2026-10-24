@@ -10,10 +10,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * nothing. https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
  */
 
-/** Telegram makes fresh initData each time the button is pressed; data older than this is refused */
-export const INIT_DATA_MAX_AGE_SEC = 6 * 3600;
-/** how long one opening of a preview may be reloaded */
-export const TICKET_SEC = 3600;
+/**
+ * Telegram makes fresh initData each time the button is pressed; older data is refused.
+ * The page keeps it in the tab (sessionStorage) so a reload signs in again within this hour.
+ */
+export const INIT_DATA_MAX_AGE_SEC = 3600;
+/** a ticket is spent on the page load right after it is made, then taken off the address */
+export const TICKET_SEC = 5 * 60;
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,7 +65,7 @@ function sign(body: string, botToken: string): string {
   return createHmac("sha256", key).update(body).digest("base64url");
 }
 
-/** "<Telegram user>.<editor>.<draft>.<expiry>.<signature>" — opens one draft's preview for an hour */
+/** "<Telegram user>.<editor>.<draft>.<expiry>.<signature>" — opens one draft's preview for five minutes */
 export function makeTicket(t: Omit<Ticket, "exp">, botToken: string, now = new Date()): string {
   const body = `${t.tgUserId}.${t.staffId.toLowerCase()}.${t.candidateId.toLowerCase()}.${Math.floor(now.getTime() / 1000) + TICKET_SEC}`;
   return `${body}.${sign(body, botToken)}`;

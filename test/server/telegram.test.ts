@@ -157,14 +157,14 @@ describe("Telegram Mini App sign-in", () => {
     assert.equal(verifyInitData(initDataFor(USER, "654321:another-bot", at), TOKEN, now), null, "another bot's data");
     const tampered = initDataFor(USER, TOKEN, at).replace(encodeURIComponent(`"id":${USER}`), encodeURIComponent(`"id":${STRANGER}`));
     assert.equal(verifyInitData(tampered, TOKEN, now), null, "a changed user");
-    assert.equal(verifyInitData(initDataFor(USER, TOKEN, at - 7 * 3600), TOKEN, now), null, "too old");
-    assert.ok(verifyInitData(initDataFor(USER, TOKEN, at - 5 * 3600), TOKEN, now), "a Mini App left open for a while");
+    assert.equal(verifyInitData(initDataFor(USER, TOKEN, at - 2 * 3600), TOKEN, now), null, "too old");
+    assert.ok(verifyInitData(initDataFor(USER, TOKEN, at - 50 * 60), TOKEN, now), "a Mini App reloaded within the hour");
     assert.equal(verifyInitData(initDataFor(USER, TOKEN, at + 3600), TOKEN, now), null, "from the future");
     assert.equal(verifyInitData(initDataFor(USER, TOKEN, at, { first_name: "no id" }), TOKEN, now), null, "no user id");
     assert.equal(verifyInitData("auth_date=1&user=%7B%7D", TOKEN, now), null, "no hash");
   });
 
-  it("issues a ticket for one draft, for an hour, that only this server can make", () => {
+  it("issues a ticket for one draft, for minutes, that only this server can make", () => {
     const ticket = makeTicket({ tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE }, TOKEN, now);
     assert.deepEqual(readTicket(ticket, TOKEN, now), { tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE, exp: at + TICKET_SEC });
     assert.equal(readTicket(ticket, TOKEN, new Date(now.getTime() + TICKET_SEC * 1000)), null, "expired");

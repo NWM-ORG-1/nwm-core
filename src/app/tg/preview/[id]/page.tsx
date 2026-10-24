@@ -32,7 +32,7 @@ async function Body({ params, searchParams }: PageProps<"/tg/preview/[id]">) {
   const adminHref = `/admin/candidates/${id}/preview`;
 
   if (view.state === "missing") notFound();
-  if (view.state === "signin") return <MiniAppGate candidateId={id} adminHref={adminHref} expired={ticket !== null} />;
+  if (view.state === "signin") return <MiniAppGate candidateId={id} adminHref={adminHref} />;
   if (view.state === "denied") {
     return (
       <div className="mx-auto max-w-[28rem] px-5 pt-16 text-center">
