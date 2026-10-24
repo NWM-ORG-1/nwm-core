@@ -6,6 +6,7 @@ import type { ArticleFull } from "@/data/dto";
 import { BEATS } from "@/lib/beats";
 import { AI_DISCLOSURE, aiLabelLong, IPTC_SOURCE_TYPE } from "@/lib/labels";
 import { SITE } from "@/lib/site";
+import { LOGO_URL, ORG_ID } from "@/components/site/OrgJsonLd";
 import type { Queue } from "@/lib/client/reading";
 import { ArticleView, RelatedList, StoryTimeline } from "@/components/article/ArticleView";
 import { NextUp, QueueRail, ReaderDock, ReaderShell } from "@/components/article/ArticleReader";
@@ -33,7 +34,9 @@ export async function generateMetadata({ params }: PageProps<"/a/[slug]">): Prom
       modifiedTime: a.updatedAt,
       section: BEATS[a.beat].label,
       tags: a.tags,
+      images: [{ url: `/a/${a.slug}/image`, width: 1200, height: 675, alt: a.title }],
     },
+    twitter: { card: "summary_large_image", images: [`/a/${a.slug}/image`] },
     other: AI_DISCLOSURE
       ? {
           "nwm:ai-involvement": a.aiInvolvement,
@@ -55,13 +58,15 @@ function jsonLd(a: ArticleFull) {
     keywords: a.tags.join(", "),
     inLanguage: "ko-KR",
     mainEntityOfPage: `${SITE.url}/a/${a.slug}`,
+    // 1200×675, drawn by ./image/route.tsx
+    image: [`${SITE.url}/a/${a.slug}/image`],
     // with AI disclosure off, only reporter-written pieces name a person as author
     author:
       a.author && (AI_DISCLOSURE || a.aiInvolvement === "human")
         ? { "@type": "Person", name: a.author.name, url: `${SITE.url}/editors/${a.author.slug}` }
         : { "@type": "Organization", name: AI_DISCLOSURE ? a.byline : SITE.name },
     editor: a.editor ? { "@type": "Person", name: a.editor.name, url: `${SITE.url}/editors/${a.editor.slug}` } : undefined,
-    publisher: { "@type": "NewsMediaOrganization", name: SITE.name, alternateName: SITE.short, url: SITE.url, logo: { "@type": "ImageObject", url: `${SITE.url}/icon.svg` } },
+    publisher: { "@type": "NewsMediaOrganization", "@id": ORG_ID, name: SITE.name, alternateName: SITE.short, url: SITE.url, logo: { "@type": "ImageObject", url: LOGO_URL, width: 512, height: 512 } },
     // machine-readable AI provenance (IPTC digital source type)
     digitalSourceType: AI_DISCLOSURE ? IPTC_SOURCE_TYPE[a.aiInvolvement] : undefined,
     correction: a.corrections.map((c) => ({ "@type": "CorrectionComment", text: c.note, datePublished: c.publishedAt })),

@@ -15,7 +15,8 @@ export const ensureStatic = "navigation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { demo } = await getSiteFlags();
-  return demo ? { robots: { index: false, follow: false } } : {};
+  // the large image card in Google News / Discover needs max-image-preview:large
+  return demo ? { robots: { index: false, follow: false } } : { robots: { index: true, follow: true, "max-image-preview": "large" } };
 }
 
 export default async function SiteLayout({ children }: LayoutProps<"/">) {

@@ -619,7 +619,8 @@ export async function getSitemapEntries(): Promise<{
     .from(articles)
     .where(published)
     .orderBy(desc(articles.publishedAt))
-    .limit(5000);
+    // one sitemap holds 50,000 URLs; sections and stories take the rest
+    .limit(45_000);
   const s = await db
     .select({ slug: stories.slug, updatedAt: stories.lastPublishedAt })
     .from(stories)

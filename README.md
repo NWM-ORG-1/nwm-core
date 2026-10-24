@@ -157,6 +157,10 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
   - `article_stats_daily`(유입 경로별 조회 포함), `activity_log`, `site_settings`, `ai_usage`
   - `desk_runs`, `desk_decisions`, `desk_playbooks`, `draft_feedback`, `desk_lessons` (AI 데스크)
   - `telegram_links`, `telegram_messages` (뉴스룸 봇)
+- **검색·구글 뉴스**
+  - 기사마다 1200×675 대표 이미지를 그립니다(`/a/{slug}/image`: 분야·제목·날짜를 브랜드 카드에). `og:image`·`twitter:image`와 기사 구조화 데이터(`NewsArticle.image`)에 같은 주소가 들어갑니다. 처음 요청 때 그려 기사 캐시와 함께 보관하고, 기사를 고치거나 정정하면 다시 그립니다.
+  - 홈에 `NewsMediaOrganization`(이름·로고·연락처·정정 정책)과 `WebSite` 구조화 데이터, 대표 주소(canonical)를 둡니다. ‘등록 예정’인 법정 표기 값은 넣지 않습니다.
+  - 독자 페이지는 `max-image-preview:large`로 큰 이미지 카드를 허용합니다. 사이트맵은 기사 4만 5천 건까지, 뉴스 사이트맵은 최근 48시간 기사입니다.
 - **신뢰 장치**
   - 모든 기사에 AI 표기를 붙입니다. 화면 배지, 메타 태그, JSON-LD IPTC `digitalSourceType`.
   - AI 초안·보조 기사는 **책임 편집자가 없으면 DB가 거부**합니다 (CHECK 제약).
@@ -189,6 +193,7 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    | `INTERNAL_API_SECRET` | 임의의 긴 문자열 |
    | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | `openssl rand -base64 32` (배포 간 고정) |
    | `NEXT_PUBLIC_SITE_URL` | `https://newweb.media` |
+   | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` (선택) | Google 서치 콘솔 소유권 확인용 HTML 태그 값(`content="…"` 안의 문자열). 도메인 DNS에 TXT 레코드로 확인했다면 필요 없습니다. 빌드 때 들어가므로 **다음 배포부터** 반영됩니다 |
    | `NEXT_PUBLIC_GA_ID` (선택) | Google 애널리틱스 4 측정 ID(`G-…`). 독자 페이지에만 붙고 뉴스룸에는 붙지 않습니다. 설정하면 개인정보처리방침에 방문 통계 항목이 함께 나갑니다. 빌드 때 들어가므로 **다음 배포부터** 반영됩니다 |
    | `SEED_ON_EMPTY` | 첫 배포만 `1` (샘플 데이터), 이후 `0`. 이미 쓰고 있는 DB(실제 기사·계정·가설이 있거나 샘플을 지운 적이 있음)에는 다시 넣지 않습니다. |
    | `LEGAL_*` (선택) | 법정 표기(제호·상호·등록번호·등록일·발행인·편집인·발행소·전화·사업자등록번호·청소년보호책임자·개인정보보호책임자·이메일·제보 이메일·창간). 빌드 때 페이지에 들어가므로 **다음 배포부터** 반영됩니다. 바로 반영하려면 `/admin/settings`에서 입력합니다. 예전 이름 `SITE_*`(`SITE_REG_NO`, `SITE_PUB_DATE` 등)도 읽습니다. 이름 목록은 `src/lib/site.ts`의 `LEGAL_FIELDS` |

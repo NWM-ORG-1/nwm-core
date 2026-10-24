@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { getArticle, getHomeData, getSiteFlags } from "@/data/public";
+import { OrgJsonLd } from "@/components/site/OrgJsonLd";
+import { SITE } from "@/lib/site";
 import { QueueScope } from "@/components/feed/QueueScope";
 import { RiverClient } from "@/components/feed/RiverClient";
 import { toMini } from "@/components/feed/types";
@@ -9,13 +12,20 @@ import { LaunchNotice } from "@/components/home/LaunchNotice";
 import { PulseSentiment } from "@/components/home/PulseSentiment";
 import { BeatRails, PopularList, SectionHead, StoryList } from "@/components/home/Rails";
 
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+    types: { "application/rss+xml": [{ url: "/rss.xml", title: `${SITE.name} 최신 기사` }] },
+  },
+};
+
 export default async function HomePage() {
-  const data = await getHomeData();
+  const [data, { legal }] = await Promise.all([getHomeData(), getSiteFlags()]);
   // Nothing published yet: show the launch notice until the first article goes out.
   if (!data.hero && data.river.length === 0) {
-    const { legal } = await getSiteFlags();
     return (
       <main className="mx-auto max-w-[1320px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
+        <OrgJsonLd legal={legal} />
         <LaunchNotice email={legal.reportEmail} />
       </main>
     );
@@ -28,6 +38,7 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-[1320px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
+      <OrgJsonLd legal={legal} />
       <h1 className="sr-only">뉴웹미디어 주요 뉴스</h1>
 
       <div className="grid gap-5 lg:grid-cols-12">

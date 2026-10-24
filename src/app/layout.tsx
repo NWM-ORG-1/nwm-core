@@ -25,6 +25,8 @@ export const metadata: Metadata = {
     types: { "application/rss+xml": [{ url: "/rss.xml", title: `${SITE.name} 최신 기사` }] },
   },
   formatDetection: { telephone: false, address: false, email: false },
+  // Search Console ownership by meta tag (a DNS record works too and needs nothing here)
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim() ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION.trim() } } : {}),
 };
 
 export const viewport: Viewport = {

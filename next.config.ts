@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   output: "standalone",
   poweredByHeader: false,
+  // article share images (src/app/(site)/a/[slug]/opengraph-image.tsx) render new articles at runtime
+  outputFileTracingIncludes: {
+    "/a/**": ["./node_modules/pretendard/dist/public/static/Pretendard-Black.otf", "./node_modules/pretendard/dist/public/static/Pretendard-Bold.otf"],
+  },
 
   /**
    * Cache lifetimes (seconds). `stale` stays ≥ 300 so cached list data is part of
