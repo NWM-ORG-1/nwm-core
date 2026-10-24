@@ -4,12 +4,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { candidateItems, candidates, feedItems } from "@/db/schema";
+import { candidateItems, candidates, feedItems, type Beat } from "@/db/schema";
 import { EMPTY_DRAFT } from "@/lib/content/blocks";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
+import { saveDerived } from "../derived-items";
 import { mapLimit } from "@/lib/ai/limit";
 import { getGenerator } from "../generator";
+import { SOCIAL_ADAPTERS } from "../generator/visual";
 import { loadItemsByIds, NewsroomError } from "../newsroom";
 import { fail, ok, type ActionState } from "./result";
 
@@ -66,6 +68,7 @@ export async function promoteItems(input: {
               payload: r.payload,
               url: r.url,
               publishedAt: r.publishedAt,
+              social: SOCIAL_ADAPTERS.has(r.source.adapter),
             })),
           }),
         )
@@ -99,6 +102,7 @@ export async function promoteItems(input: {
           })
           .returning({ id: candidates.id });
         await tx.insert(candidateItems).values(group.map((r, i) => ({ candidateId: cand.id, feedItemId: r.id, role: i === 0 ? "primary" : "supporting" })));
+        await saveDerived(tx, cand.id, gen?.derived, b as Beat);
         await logActivity(tx, {
           actorId: me.id,
           kind: "promote",

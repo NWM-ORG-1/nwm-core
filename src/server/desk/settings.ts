@@ -41,6 +41,8 @@ export const deskSettingsSchema = z.object({
   draftModel: z.enum(DESK_DRAFT_MODELS),
   /** the weekly review may rewrite the editorial guide by itself */
   playbookAuto: z.boolean(),
+  /** photos in social posts are read (never published); price charts are redrawn from our data */
+  imageRedraw: z.boolean(),
 });
 export type DeskSettings = z.infer<typeof deskSettingsSchema>;
 
@@ -55,6 +57,7 @@ export const DESK_DEFAULTS: DeskSettings = {
   triageModel: "claude-haiku-5-5",
   draftModel: "claude-opus-5-5",
   playbookAuto: true,
+  imageRedraw: true,
 };
 
 /** Stored values over the defaults; a malformed field falls back to its default. */

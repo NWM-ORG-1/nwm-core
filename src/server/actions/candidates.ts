@@ -13,6 +13,7 @@ import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { confirmLegalAs, publishAs, rejectAs, saveDraftAs } from "../candidate-ops";
 import { createAutoCandidate } from "../auto/create";
+import { DERIVED_SOURCE, replaceDerived } from "../derived-items";
 import { marketInputs, publicSentiment } from "../auto/inputs";
 import { buildDataDraft, DATA_TEMPLATES, type DataTemplateId } from "../generator/data-templates";
 import { getGenerator, type AssistResult } from "../generator";
@@ -198,7 +199,8 @@ export async function regenerateDraft(input: { id: string }): Promise<ActionStat
     const p = z.object({ id }).parse(input);
     const c = await loadCandidate(p.id);
     if (c.status === "published") throw new NewsroomError("이미 발행된 후보입니다.", "state");
-    const items = (await loadCandidateItems(db, c.id)).map(toGenItem);
+    // numbers computed for the last draft are computed again, not read back as material
+    const items = (await loadCandidateItems(db, c.id)).map(toGenItem).filter((i) => i.sourceName !== DERIVED_SOURCE.name);
     const gen = await getGenerator().draftFromItems({ items, beat: c.beat, mode: c.mode, idea: c.idea });
     const [u] = await db
       .update(candidates)
@@ -215,6 +217,7 @@ export async function regenerateDraft(input: { id: string }): Promise<ActionStat
       })
       .where(and(eq(candidates.id, c.id), ne(candidates.status, "published")))
       .returning({ lockVersion: candidates.lockVersion });
+    await replaceDerived(db, c.id, gen.derived, c.beat);
     // a fresh model draft: the next human save keeps it as the new "before"
     await db.delete(draftFeedback).where(and(eq(draftFeedback.candidateId, c.id), isNull(draftFeedback.outcome)));
     const how = gen.meta.model ? `${gen.meta.model}${gen.meta.usage ? `, $${gen.meta.usage.costUsd.toFixed(3)}` : ""}` : gen.meta.id;

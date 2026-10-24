@@ -165,6 +165,13 @@ export function DeskSettingsForm({
         </label>
         <input id="desk-auto" type="checkbox" checked={v.playbookAuto} onChange={(e) => set("playbookAuto", e.target.checked)} className="size-4 accent-[var(--ice)]" />
       </div>
+      <div className={row}>
+        <label htmlFor="desk-images" className={label}>
+          사진 재가공
+          <span className={hint}>SNS 게시물의 사진은 기사에 쓰지 않고 AI가 읽기만 합니다. 시세 차트면 바이낸스 데이터로 우리 차트를 새로 그리고, 주장은 수익률 표로 확인합니다. 끄면 사진을 읽지 않습니다.</span>
+        </label>
+        <input id="desk-images" type="checkbox" checked={v.imageRedraw} onChange={(e) => set("imageRedraw", e.target.checked)} className="size-4 accent-[var(--ice)]" />
+      </div>
       <div className="flex flex-wrap items-center gap-3 pt-3">
         <button type="submit" disabled={!dirty || pending} className={cx(btn.base, dirty ? btn.primary : btn.ghost)}>
           {pending ? "저장 중…" : "저장"}

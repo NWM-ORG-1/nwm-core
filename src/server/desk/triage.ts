@@ -27,6 +27,7 @@ export const DESK_SYSTEM_PROMPT = `당신은 뉴웹미디어의 AI 데스크입�
 - draft: 지금 기사로 쓸 만하고, 신호 전용이 아닌 자료에 사실 근거가 있습니다.
 - hold: 뉴스 가치는 있지만 근거가 신호 전용 자료(다른 언론 기사)나 커뮤니티 글뿐이라 1차 자료 확인이 먼저입니다.
 - skip: 기사 가치가 낮거나(홍보, 행사, 인사, 단순 일정), 최근 기사·초안과 겹치거나, 이미 48시간이 지났거나, 확인하기 어려운 의혹·루머이거나, 특정 개인에 대한 부정적 주장입니다.
+- 예외(화제·팩트체크): SNS에서 도는 시장 속설이나 바이럴 차트("…할 때마다 비트코인이 올랐다" 같은 주장)는 근거가 SNS 글뿐이어도, 주장을 코인 가격 이력으로 맞는지 확인할 수 있으면 draft로 고를 수 있습니다. 기자는 게시물의 사진을 쓰지 않고 시세 데이터로 차트를 다시 그려 확인합니다. angle은 "…라는 주장, 시세로 확인"처럼 쓰고, 투자 권유로 읽힐 위험은 risk에 반영합니다.
 
 # 점수(0–100)
 - news(뉴스 가치): 새로움, 영향 범위, 시의성.
@@ -57,6 +58,8 @@ export interface TriageItem {
   entities: string[];
   publishedAt: Date | null;
   fetchedAt: Date;
+  /** photos attached to a social post */
+  photos?: number;
 }
 
 const StoryOut = z.object({
@@ -155,7 +158,7 @@ export function triagePrompt(input: {
       [
         `<자료 번호="${n + 1}">`,
         `출처: ${clean(i.sourceName, 60)} · ${i.sourceKind} · 신뢰 등급 ${i.trustTier}(${TRUST_TIER_LABEL[i.trustTier] ?? "미확인"}) · ${i.signalOnly ? "신호 전용(다른 언론 기사)" : "기사 근거로 쓸 수 있음"} · 라이선스 ${licence(i)}`,
-        `게시: ${dateTimeKST(i.publishedAt ?? i.fetchedAt)} (KST)${i.beatGuess ? ` · 분야 추정 ${i.beatGuess}` : ""}`,
+        `게시: ${dateTimeKST(i.publishedAt ?? i.fetchedAt)} (KST)${i.beatGuess ? ` · 분야 추정 ${i.beatGuess}` : ""}${i.photos ? ` · 사진 ${i.photos}장` : ""}`,
         `제목: ${clean(i.title, 200)}`,
         ...(clean(i.summary, 400) && clean(i.summary, 400) !== clean(i.title, 200) ? [`내용: ${clean(i.summary, 400)}`] : []),
         ...(i.entities.length ? [`개체: ${i.entities.slice(0, 8).map((e) => clean(e, 30)).join(", ")}`] : []),

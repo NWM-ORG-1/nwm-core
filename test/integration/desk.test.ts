@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { arrayOverlaps, eq, inArray, like } from "drizzle-orm";
+import { and, arrayOverlaps, eq, inArray, like } from "drizzle-orm";
 import { closeDb, db } from "@/db/client";
 import { activityLog, candidateItems, candidates, deskDecisions, deskPlaybooks, deskRuns, feedItems, feedSources } from "@/db/schema";
 import { runDesk, type DeskRunReport } from "@/server/desk/run";
@@ -8,7 +8,10 @@ import { kstDayStart } from "@/server/desk/score";
 import { DESK_DEFAULTS, type DeskSettings } from "@/server/desk/settings";
 import type { TriageOut } from "@/server/desk/triage";
 import { NO_LEDGER, type CreateCall, type DraftOut } from "@/server/generator/claude";
+import type { PostRead } from "@/server/generator/visual";
+import { DERIVED_SOURCE } from "@/server/derived-items";
 import type { BodyFetcher } from "@/ingest/fetch-body";
+import { monthlyKlines } from "../fixtures/market";
 
 /** Needs Postgres (DATABASE_URL); CI provides one. Creates and removes its own rows; Claude is faked. */
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -28,6 +31,8 @@ const T = {
   g: "가상부, 반도체 인허가 기간 절반으로 단축",
   h: "가상부, 수출기업 대상 설명회 개최",
   i: "가상체인, 메인넷 출시 일정 공개",
+  j: "가상버거가 돌아온다",
+  k: "가상체인 곧 대형 호재 발표 예정",
 };
 
 const draftOut: DraftOut = {
@@ -62,11 +67,20 @@ const story = (over: Partial<Story>): Story => ({
 });
 
 /** Claude stand-in: triage answers by item title (the prompt numbers the items), drafts get `draftOut`. */
-function fakeClaude(triage: (n: (title: string) => number) => Story[]) {
-  const calls: Array<{ kind: "triage" | "draft"; user: string }> = [];
+function fakeClaude(triage: (n: (title: string) => number) => Story[], post?: { read: PostRead; draft: DraftOut }) {
+  const calls: Array<{ kind: "triage" | "draft" | "post"; user: string }> = [];
   const create: CreateCall = async (body) => {
-    const user = String(body.messages[0].content);
+    const content = body.messages[0].content;
+    const user = typeof content === "string" ? content : JSON.stringify(content);
     const reply = (x: unknown) => ({ content: [{ type: "text", text: JSON.stringify(x) }], stop_reason: "end_turn", usage: { input_tokens: 1000, output_tokens: 500 } });
+    if (JSON.stringify(body.system).includes("자료 판독 담당")) {
+      calls.push({ kind: "post", user });
+      return reply(post?.read ?? { kind: "none", description: "", asset: "", interval: "", from: "", marks: [], claim: "", checkable: false });
+    }
+    if (post && !JSON.stringify(body.system).includes("AI 데스크입니다")) {
+      calls.push({ kind: "draft", user });
+      return reply(post.draft);
+    }
     if (JSON.stringify(body.system).includes("AI 데스크입니다")) {
       calls.push({ kind: "triage", user });
       const index = new Map<string, number>();
@@ -92,9 +106,10 @@ let ministry = "";
 let reputable = "";
 let signal = "";
 let playbookExisted = false;
+let derivedSourceExisted = false;
 const itemIds = new Map<string, string>();
 
-async function addItem(key: keyof typeof T, o: { source: string; summary: string; publishedHoursAgo?: number; beat?: "ai" | "economy" | "tech"; url?: string }) {
+async function addItem(key: keyof typeof T, o: { source: string; summary: string; publishedHoursAgo?: number; beat?: "ai" | "economy" | "tech"; url?: string; payload?: Record<string, unknown> }) {
   const [row] = await db
     .insert(feedItems)
     .values({
@@ -108,6 +123,7 @@ async function addItem(key: keyof typeof T, o: { source: string; summary: string
       score: 60,
       publishedAt: new Date(NOW.getTime() - (o.publishedHoursAgo ?? 2) * HOUR),
       fetchedAt: new Date(NOW.getTime() - HOUR),
+      ...(o.payload ? { payload: o.payload } : {}),
     })
     .returning({ id: feedItems.id });
   itemIds.set(key, row.id);
@@ -123,8 +139,15 @@ async function cleanup() {
     const decisions = await db.select({ id: deskDecisions.id, candidateId: deskDecisions.candidateId }).from(deskDecisions).where(arrayOverlaps(deskDecisions.itemIds, items));
     const cands = decisions.flatMap((d) => (d.candidateId ? [d.candidateId] : []));
     if (cands.length) {
+      const derived = await db
+        .select({ id: feedItems.id })
+        .from(candidateItems)
+        .innerJoin(feedItems, eq(candidateItems.feedItemId, feedItems.id))
+        .innerJoin(feedSources, eq(feedItems.sourceId, feedSources.id))
+        .where(and(inArray(candidateItems.candidateId, cands), eq(feedSources.slug, DERIVED_SOURCE.slug)));
       await db.delete(activityLog).where(inArray(activityLog.entityId, cands));
       await db.delete(candidates).where(inArray(candidates.id, cands));
+      if (derived.length) await db.delete(feedItems).where(inArray(feedItems.id, derived.map((d) => d.id)));
     }
     await db.delete(feedSources).where(inArray(feedSources.id, sources.map((s) => s.id)));
     if (decisions.length) await db.delete(deskDecisions).where(inArray(deskDecisions.id, decisions.map((d) => d.id)));
@@ -134,11 +157,13 @@ async function cleanup() {
     await db.delete(deskRuns).where(inArray(deskRuns.id, runs));
   }
   if (!playbookExisted) await db.delete(deskPlaybooks).where(eq(deskPlaybooks.source, "initial"));
+  if (!derivedSourceExisted) await db.delete(feedSources).where(eq(feedSources.slug, DERIVED_SOURCE.slug));
 }
 
 describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
   before(async () => {
     playbookExisted = Boolean(await db.query.deskPlaybooks.findFirst());
+    derivedSourceExisted = Boolean(await db.query.feedSources.findFirst({ where: eq(feedSources.slug, DERIVED_SOURCE.slug) }));
     await cleanup();
     const lic = { licReviewedAt: new Date(), licCommercialOk: true, licVerbatimOk: true, licRedistributionOk: true };
     [{ id: official }] = await db
@@ -311,6 +336,109 @@ describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
     const off = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "schedule", globalCapUsd: 1000, settings: settings({ enabled: false }) });
     assert.equal(off.runId, null);
     assert.equal(off.note, "꺼짐");
+  });
+
+  it("writes a fact-check from a channel post: reads the photo, redraws the chart from market data, keeps the numbers", async () => {
+    const [{ id: channel }] = await db
+      .insert(feedSources)
+      .values({ slug: `${PREFIX}tg-photo`, name: "가상코인속보", kind: "scrape", adapter: "telegram.channel", trustTier: 2, signalOnly: true, config: { channel: "itest_desk_photo", llmConsent: true } })
+      .returning({ id: feedSources.id });
+    const photo = "https://cdn4.telesco.pe/file/itest-desk-chart.jpg";
+    await addItem("j", { source: channel, summary: "가상버거가 다시 판매된다. 돌아올 때마다 BTC가 두 배 넘게 올랐다.", beat: "economy", payload: { channel: "itest_desk_photo", images: [photo] } });
+
+    const read: PostRead = {
+      kind: "price_chart",
+      description: "비트코인 월봉 차트에 화살표가 그려져 있다",
+      asset: "BTC",
+      interval: "1M",
+      from: "2020-01",
+      marks: [
+        { at: "2020-11", label: "가상버거 재출시" },
+        { at: "2023-10", label: "가상버거 재출시" },
+      ],
+      claim: "가상버거가 다시 나올 때마다 비트코인이 두 배 넘게 올랐다는 주장",
+      checkable: true,
+    };
+    const factCheck: DraftOut = {
+      title: "가상버거 돌아오면 비트코인 2배, 두 번 모두 맞았다",
+      dek: "가상버거 재출시 뒤 비트코인이 두 배 넘게 올랐다는 주장이 돌고 있다. 12개월 기록이 있는 두 번 모두 2배 이상 올랐다.",
+      why: ["재미로 도는 시장 속설을 숫자로 확인했다."],
+      numbers: [
+        { value: "+213.8%", label: "2020-11 이후 12개월", trend: "up" },
+        { value: "+77.2%", label: "6개월 뒤", trend: "up" },
+      ],
+      sections: [{ label: "yes_but", text: "표본이 두 번뿐이라 우연의 일치일 수 있다.", bullets: [] }],
+      next: ["이번 재출시 이후 흐름"],
+      tags: ["비트코인", "시장 속설"],
+      tickers: ["BTC"],
+      sourceIndexes: [1, 2],
+      notes: [],
+    };
+    const { create, calls } = fakeClaude(
+      (n) => [story({ items: [n(T.j)], beat: "economy", topic: "시장 속설", angle: "가상버거 지표, 시세로 확인", news: 80, interest: 95, evidence: 80, risk: 10, reason: "시세로 확인할 수 있는 화제" })],
+      { read, draft: factCheck },
+    );
+    const asked: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input instanceof Request ? input.url : input);
+      asked.push(url);
+      if (url === photo) return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16]), { headers: { "content-type": "image/jpeg" } });
+      const u = new URL(url);
+      if (u.host === "data-api.binance.vision") return Response.json(monthlyKlines().filter((k) => k[0] >= Number(u.searchParams.get("startTime") ?? 0)));
+      return new Response("unexpected", { status: 500 });
+    };
+    const r = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "manual", globalCapUsd: 1000, settings: settings(), fetchImpl });
+    if (r.runId) runs.push(r.runId);
+
+    assert.deepEqual(
+      calls.map((c) => c.kind),
+      ["triage", "post", "draft"],
+    );
+    assert.match(calls[1].user, /"type":"image".*"media_type":"image\/jpeg"/, "the photo is read");
+    assert.ok(!calls[2].user.includes(photo), "the photo never reaches the writer");
+    assert.match(calls[2].user, /SNS에서 도는 시장 속설을 데이터로 확인하는/);
+    assert.match(calls[2].user, /바이낸스 BTC\/USDT 시세 \(NWM 계산\)/);
+    assert.equal(r.drafted.length, 1);
+
+    const cand = await db.query.candidates.findFirst({ where: eq(candidates.id, r.drafted[0].candidateId) });
+    const types = cand!.draft.blocks.map((b) => b.type);
+    assert.deepEqual(types, ["why", "numbers", "chart", "table", "section", "next"], "our chart and table after the key points");
+    const chart = cand!.draft.blocks.find((b) => b.type === "chart");
+    assert.equal(chart?.type === "chart" && chart.marks?.length, 2);
+    assert.match(cand!.aiNote ?? "", /게시물 사진\(남이 만든 차트\)은 기사에 넣지 않았습니다/);
+    assert.equal(cand!.checks?.find((c) => c.id === "numbers")?.ok, true, "the computed numbers are a source");
+    assert.equal(cand!.checks?.find((c) => c.id === "sources")?.ok, true);
+
+    const linked = await db
+      .select({ slug: feedSources.slug, role: candidateItems.role, title: feedItems.title })
+      .from(candidateItems)
+      .innerJoin(feedItems, eq(candidateItems.feedItemId, feedItems.id))
+      .innerJoin(feedSources, eq(feedItems.sourceId, feedSources.id))
+      .where(eq(candidateItems.candidateId, cand!.id));
+    const derived = linked.find((l) => l.slug === DERIVED_SOURCE.slug);
+    assert.equal(derived?.role, "supporting");
+    assert.match(derived?.title ?? "", /^비트코인 시점별 수익률 — 바이낸스 BTC\/USDT 월봉 \(NWM 계산/);
+    assert.ok(asked.some((u) => u.includes("symbol=BTCUSDT&interval=1M")));
+  });
+
+  it("holds a channel post whose claim cannot be checked with prices", async () => {
+    const [{ id: channel }] = await db
+      .insert(feedSources)
+      .values({ slug: `${PREFIX}tg-rumor`, name: "가상 소문 채널", kind: "scrape", adapter: "telegram.channel", trustTier: 3, signalOnly: true, config: { channel: "itest_desk_rumor", llmConsent: true } })
+      .returning({ id: feedSources.id });
+    const id = await addItem("k", { source: channel, summary: "가상체인이 곧 대형 호재를 발표한다는 소문.", beat: "economy" });
+    const rumor: PostRead = { kind: "none", description: "", asset: "", interval: "", from: "", marks: [], claim: "가상체인이 곧 호재를 발표한다는 소문", checkable: false };
+    const { create, calls } = fakeClaude((n) => [story({ items: [n(T.k)], beat: "economy", topic: "소문", angle: "가상체인 호재설", news: 80, interest: 90, evidence: 70, risk: 10, reason: "화제" })], { read: rumor, draft: draftOut });
+    const r = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "manual", globalCapUsd: 1000, settings: settings(), fetchImpl: async () => new Response("unexpected", { status: 500 }) });
+    if (r.runId) runs.push(r.runId);
+    assert.deepEqual(
+      calls.map((c) => c.kind),
+      ["triage", "post"],
+      "read, but never drafted",
+    );
+    const row = await db.select({ decision: deskDecisions.decision, reason: deskDecisions.reason }).from(feedItems).innerJoin(deskDecisions, eq(deskDecisions.id, feedItems.deskDecisionId)).where(eq(feedItems.id, id));
+    assert.equal(row[0]?.decision, "hold");
+    assert.match(row[0]?.reason ?? "", /^1차 자료 확인 필요 — 게시물의 주장을 시세로 확인하지 못했습니다/);
   });
 
   it("leaves a channel without its operator's consent to the editors", async () => {

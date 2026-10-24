@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { Block, BlockType, KeyNumber, SentimentSnapshot } from "@/lib/content/blocks";
+import { MAX_CHART_POINTS, type Block, type BlockType, type KeyNumber, type SentimentSnapshot } from "@/lib/content/blocks";
 import { SECTION_LABELS, SECTION_LABEL_KO } from "@/lib/content/meta";
 import { sentimentLabel } from "@/lib/labels";
 import { btn, cx } from "@/components/admin/ui";
@@ -576,7 +576,7 @@ function ChartEditor({ block, onChange, bad }: { block: Of<"chart">; onChange: (
       <Row
         label="데이터 (쉼표로 구분, 오래된 값부터)"
         htmlFor={`${id}-p`}
-        aside={<Count n={block.points.length} max={96} />}
+        aside={<Count n={block.points.length} max={MAX_CHART_POINTS} />}
         help={nBad ? <span className="text-bad">숫자가 아닌 값 {nBad}개 — 천 단위 쉼표 없이 입력하세요.</span> : "최소 2개. 천 단위 쉼표 없이 1384.5, 1391.2 처럼 입력합니다."}
       >
         <textarea
@@ -586,12 +586,33 @@ function ChartEditor({ block, onChange, bad }: { block: Of<"chart">; onChange: (
           aria-invalid={bad("points") || undefined}
           onChange={(e) => {
             setRaw(e.target.value);
-            onChange({ ...block, points: parsePoints(e.target.value) });
+            const points = parsePoints(e.target.value);
+            // dates and marks belong to the points they were drawn with
+            const { labels, marks, ...rest } = block;
+            onChange({ ...rest, points, ...(labels && labels.length === points.length ? { labels, ...(marks ? { marks } : {}) } : {}) });
           }}
           className={cx(f.textarea, "tabular font-mono text-[12.5px]")}
           placeholder="1384.5, 1391.2, 1388.0, 1402.7"
         />
       </Row>
+      {(block.labels || block.marks?.length) && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-3">
+          {block.labels && (
+            <span>
+              날짜 {block.labels[0]}–{block.labels[block.labels.length - 1]}
+            </span>
+          )}
+          {block.marks?.length ? <span>표시 {block.marks.map((m) => `${block.labels?.[m.i] ?? m.i + 1} ${m.label}`).join(", ")}</span> : null}
+          {block.scale === "log" && <span>로그 눈금</span>}
+          <button
+            type="button"
+            onClick={() => onChange({ type: "chart", title: block.title, points: block.points, ...(block.unit ? { unit: block.unit } : {}), ...(block.source ? { source: block.source } : {}) })}
+            className="font-semibold text-fg-2 hover:text-fg hover:underline"
+          >
+            날짜·표시 지우기
+          </button>
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <Row label="출처 (선택)" htmlFor={`${id}-s`}>
           <input id={`${id}-s`} value={block.source ?? ""} maxLength={80} onChange={(e) => opt("source", e.target.value)} className={f.input} placeholder="한국은행 ECOS" />

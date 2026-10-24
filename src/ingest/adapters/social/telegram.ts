@@ -35,7 +35,14 @@ export interface TgMessage {
   views?: number;
   forwardedFrom?: string;
   link: string;
+  /** photos in the post (Telegram's CDN) — for reading only, never published */
+  images?: string[];
 }
+
+/** photo URLs from a message's photo tiles: `style="…background-image:url('https://cdn4.telesco.pe/file/….jpg')"` */
+const PHOTO_URL = /background-image:\s*url\(['"]?(https:\/\/[^'")\s]+)['"]?\)/;
+const PHOTO_HOST = /^https:\/\/([a-z0-9-]+\.)*(telesco\.pe|cdn-telegram\.org|telegram-cdn\.org)\//i;
+const MAX_IMAGES = 4;
 
 /** Exported for fixtures: t.me/s HTML → messages (oldest first, as on the page). */
 export function parseChannelPage(html: string, channel: string): { messages: TgMessage[]; before?: number } {
@@ -48,6 +55,14 @@ export function parseChannelPage(html: string, channel: string): { messages: TgM
     const textEl = el.querySelector(".tgme_widget_message_text");
     const text = textEl ? htmlToText(textEl.innerHTML) : "";
     const time = el.querySelector(".tgme_widget_message_date time")?.getAttribute("datetime");
+    const images = [
+      ...new Set(
+        el
+          .querySelectorAll(".tgme_widget_message_photo_wrap")
+          .map((p) => PHOTO_URL.exec(p.getAttribute("style") ?? "")?.[1])
+          .filter((u): u is string => Boolean(u && PHOTO_HOST.test(u))),
+      ),
+    ].slice(0, MAX_IMAGES);
     messages.push({
       id,
       text,
@@ -55,6 +70,7 @@ export function parseChannelPage(html: string, channel: string): { messages: TgM
       views: parseCount(el.querySelector(".tgme_widget_message_views")?.textContent),
       forwardedFrom: el.querySelector(".tgme_widget_message_forwarded_from_name")?.textContent.trim() || undefined,
       link: `https://t.me/${channel}/${id}`,
+      ...(images.length ? { images } : {}),
     });
   }
   const before = Number(root.querySelector(".tme_messages_more[data-before]")?.getAttribute("data-before"));
@@ -102,7 +118,7 @@ function toOutputs(msgs: TgMessage[], channel: string, c: { output: Array<"items
         summary: clip(rest.join(" "), 600),
         publishedAt: m.date ?? null,
         weight: c.weight,
-        payload: { channel, views: m.views, ...(m.forwardedFrom ? { forwardedFrom: m.forwardedFrom } : {}) },
+        payload: { channel, views: m.views, ...(m.forwardedFrom ? { forwardedFrom: m.forwardedFrom } : {}), ...(m.images ? { images: m.images } : {}) },
       });
     }
     if (c.output.includes("posts")) {

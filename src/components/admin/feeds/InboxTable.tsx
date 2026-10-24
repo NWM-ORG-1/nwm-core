@@ -765,6 +765,7 @@ function ItemDetail({
 }) {
   const s = item.source;
   const payload = JSON.stringify(item.payload ?? {}, null, 2);
+  const photos = Array.isArray(item.payload?.images) ? (item.payload.images as unknown[]).filter((u): u is string => typeof u === "string" && u.startsWith("https://")).slice(0, 4) : [];
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-4">
@@ -772,6 +773,25 @@ function ItemDetail({
           <h3 className="kicker mb-1.5 text-fg-3">요약 전문</h3>
           <p className="text-[13.5px] leading-relaxed text-fg-2">{item.summary || "요약 없음"}</p>
         </section>
+        {photos.length > 0 && (
+          <section>
+            <h3 className="kicker mb-1.5 text-fg-3">게시물 사진 · 참고용</h3>
+            <ul className="flex flex-wrap gap-2">
+              {photos.map((u) => (
+                <li key={u}>
+                  <a href={u} target="_blank" rel="noreferrer noopener" className="block overflow-hidden rounded-lg border border-line-2 hover:border-line-3">
+                    {/* someone else's picture, shown to the editor only: never published, so no next/image */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u} alt="게시물 사진" loading="lazy" referrerPolicy="no-referrer" className="h-24 w-auto max-w-[220px] object-cover" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-fg-3">
+              남이 만든 이미지라 기사에 넣지 않습니다. AI 초안은 이 사진을 읽기만 하고, 시세 차트면 우리 데이터로 다시 그립니다(AI 데스크 설정 ‘사진 재가공’).
+            </p>
+          </section>
+        )}
         {item.entities.length > 0 && (
           <section>
             <h3 className="kicker mb-1.5 text-fg-3">엔티티</h3>

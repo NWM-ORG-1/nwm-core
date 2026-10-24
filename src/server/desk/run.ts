@@ -7,7 +7,9 @@ import { mapLimit } from "@/lib/ai/limit";
 import { CRYPTO_LOW_PROFILE } from "@/lib/beats";
 import { logActivity } from "../activity";
 import { runChecks, similarity, type CheckItem } from "../checks";
-import { ClaudeCallError, writeDraft, type CreateCall, type UsageLedger } from "../generator/claude";
+import { ClaudeCallError, readPost, writeDraft, type CreateCall, type PostMaterial, type UsageLedger } from "../generator/claude";
+import { photosOf, SOCIAL_ADAPTERS, VISION_MODEL } from "../generator/visual";
+import { derivedCheckItem, saveDerived } from "../derived-items";
 import { aiMonthSpendUsd } from "../generator/ledger";
 import type { GenItem } from "../generator/types";
 import { loadDeskModel } from "./learn";
@@ -57,6 +59,8 @@ export interface DeskDeps {
   settings?: DeskSettings;
   /** reads the article behind a title-only feed item; omitted = no fetching */
   fetchBody?: BodyFetcher;
+  /** photos and price history for stories made of social posts (tests: a fake) */
+  fetchImpl?: typeof fetch;
 }
 
 export interface DeskRunReport {
@@ -122,6 +126,7 @@ const toTriage = (r: ItemRow): TriageItem => ({
   entities: r.entities,
   publishedAt: r.publishedAt,
   fetchedAt: r.fetchedAt,
+  photos: photosOf(r.payload).length,
 });
 
 const toGen = (r: ItemRow): GenItem => ({
@@ -137,6 +142,7 @@ const toGen = (r: ItemRow): GenItem => ({
   payload: r.payload,
   url: r.url,
   publishedAt: r.publishedAt,
+  social: isSocial(r),
 });
 
 const toCheck = (r: ItemRow): CheckItem => ({
@@ -148,6 +154,9 @@ const toCheck = (r: ItemRow): CheckItem => ({
   sourceName: r.source.name,
   lic: { commercialOk: r.source.licCommercialOk, verbatimOk: r.source.licVerbatimOk, reviewed: r.source.licReviewedAt != null },
 });
+
+/** posts from channels and accounts the newsroom follows (not other outlets' articles) */
+const isSocial = (r: ItemRow) => SOCIAL_ADAPTERS.has(r.source.adapter);
 
 /** Usable items (not signal-only) first, most trusted first: the draft writer takes item 1 as the main source. */
 const byPrimary = (a: ItemRow, b: ItemRow) => Number(a.source.signalOnly) - Number(b.source.signalOnly) || a.source.trustTier - b.source.trustTier;
@@ -277,7 +286,8 @@ async function judgeNew(d: DeskDeps, runId: string, settings: DeskSettings, rows
         if (CRYPTO_LOW_PROFILE && story.beat === "crypto") [decision, reason] = ["skip", CRYPTO_REASON];
         else if (decision !== "skip" && isDuplicate([story.angle, usable[0]?.title ?? items[0].title], recent)) [decision, reason] = ["skip", `최근 기사·초안과 겹침 — ${reason}`];
         else if (decision !== "skip" && usable.length && usable.every((r) => r.source.licCommercialOk === false)) [decision, reason] = ["skip", "상업 이용이 안 되는 출처뿐"];
-        else if (decision === "draft" && !usable.length) [decision, reason] = ["hold", `1차 자료 확인 필요 — ${reason}`];
+        // social posts alone may still become a fact-check: the drafting step reads them and holds what it cannot check
+        else if (decision === "draft" && !usable.length && !items.every(isSocial)) [decision, reason] = ["hold", `1차 자료 확인 필요 — ${reason}`];
         else if (decision === "draft" && scores.final < settings.minScore - NEAR_POINTS) [decision, reason] = ["skip", `${scores.final}점, 기준 ${settings.minScore}점에 못 미침 — ${reason}`];
 
         decisions.push({
@@ -364,7 +374,21 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
       return;
     }
     if (d.fetchBody) await enrichItems(db, w.items, d.fetchBody, now);
-    if (materialChars(w.items) < MIN_MATERIAL) {
+    // a story made of social posts (or with photos) is read first: the claim, our chart, the numbers
+    let post: PostMaterial | null = null;
+    try {
+      post = await readPost({ create: d.create, ledger: d.ledger }, w.items.map(toGen), { model: VISION_MODEL, photos: settings.imageRedraw, fetchImpl: d.fetchImpl }, "desk");
+    } catch (e) {
+      if (!(e instanceof ClaudeCallError)) throw e;
+      if (e.usage) report.costUsd += e.usage.costUsd;
+    }
+    if (w.items.every((r) => r.source.signalOnly) && !post?.factCheck) {
+      if (post?.usage) report.costUsd += post.usage.costUsd;
+      await closeDecision(db, w.id, "hold", `1차 자료 확인 필요 — 게시물의 주장을 시세로 확인하지 못했습니다 — ${w.reason}`);
+      return;
+    }
+    if (materialChars(w.items) < MIN_MATERIAL && !post?.items.length) {
+      if (post?.usage) report.costUsd += post.usage.costUsd;
       // a headline is not enough to write from; the editor still has the item in the inbox
       await closeDecision(db, w.id, "hold", `원문 본문을 가져오지 못해 제목만으로는 쓰지 않았습니다 — ${w.reason}`);
       return;
@@ -381,6 +405,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
           mode: "feed_draft",
           idea: w.angle ? `기사 각도 — ${w.angle}` : null,
           lessons: lessonsFor(lessons, { beat, sources: [...new Set(w.items.map((i) => i.source.name))] }, now),
+          post,
         },
         "desk:draft",
       );
@@ -397,7 +422,14 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
     }
     report.costUsd += gen.usage.costUsd;
 
-    const checks = runChecks({ draft: gen.draft, mode: "feed_draft", items: w.items.map(toCheck), recentTitles: recent.published, previous: [], editorName: null });
+    const checks = runChecks({
+      draft: gen.draft,
+      mode: "feed_draft",
+      items: [...w.items.map(toCheck), ...(gen.derived ?? []).map(derivedCheckItem)],
+      recentTitles: recent.published,
+      previous: [],
+      editorName: null,
+    });
     const risk = lowRisk({
       scores: w.scores,
       items: w.items.map((r) => ({ trustTier: r.source.trustTier, signalOnly: r.source.signalOnly, licReviewed: r.source.licReviewedAt != null, licCommercialOk: r.source.licCommercialOk })),
@@ -438,6 +470,7 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
           })
           .returning({ id: candidates.id });
         await tx.insert(candidateItems).values(w.items.map((r, i) => ({ candidateId: cand.id, feedItemId: r.id, role: i === 0 ? "primary" : "supporting" })));
+        await saveDerived(tx, cand.id, gen.derived, beat);
         await tx.update(deskDecisions).set({ candidateId: cand.id, draftedAt: now, lowRisk: risk.ok }).where(eq(deskDecisions.id, w.id));
         await logActivity(tx, {
           actorId: null,

@@ -24,6 +24,9 @@ export const keyNumberSchema = z.object({
 });
 export type KeyNumber = z.infer<typeof keyNumberSchema>;
 
+/** a chart holds up to this many points (monthly prices since 2013) */
+export const MAX_CHART_POINTS = 160;
+
 export const blockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("why"), items: z.array(item).min(1).max(3) }),
   z.object({ type: z.literal("numbers"), items: z.array(keyNumberSchema).min(1).max(4) }),
@@ -43,8 +46,17 @@ export const blockSchema = z.discriminatedUnion("type", [
     type: z.literal("chart"),
     title: z.string().trim().min(1).max(80),
     unit: z.string().trim().max(12).optional(),
-    points: z.array(z.number().finite()).min(2).max(96),
+    points: z.array(z.number().finite()).min(2).max(MAX_CHART_POINTS),
     source: z.string().trim().max(80).optional(),
+    /** x-axis label per point ("2020-11"); charts we draw from our own data carry them */
+    labels: z.array(z.string().trim().max(12)).max(MAX_CHART_POINTS).optional(),
+    /** events marked on the line (point index, short label) */
+    marks: z
+      .array(z.object({ i: z.number().int().min(0).max(MAX_CHART_POINTS - 1), label: z.string().trim().min(1).max(24) }))
+      .max(8)
+      .optional(),
+    /** log scale for long price histories */
+    scale: z.enum(["linear", "log"]).optional(),
   }),
   z.object({
     type: z.literal("table"),

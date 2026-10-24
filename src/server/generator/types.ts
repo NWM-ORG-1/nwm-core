@@ -15,12 +15,16 @@ export interface GenItem {
   payload: Record<string, unknown>;
   url: string | null;
   publishedAt?: Date | null;
+  /** a post from a channel or account the newsroom follows (Telegram, X), not another outlet's article */
+  social?: boolean;
 }
 
 export interface GeneratedDraft {
   draft: Draft;
   aiNote: string | null;
   meta: GeneratorMeta;
+  /** material we computed for this draft (a price check): saved with the candidate as its source */
+  derived?: GenItem[];
 }
 
 export type AssistAction = "headlines" | "tighten" | "why" | "numbers" | "next";

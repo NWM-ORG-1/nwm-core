@@ -86,7 +86,7 @@ export function ArticleBlocks({ blocks, sentiment }: { blocks: Block[]; sentimen
               </figure>
             );
           case "chart":
-            return <ChartBlock key={i} title={b.title} unit={b.unit} points={b.points} source={b.source} />;
+            return <ChartBlock key={i} title={b.title} unit={b.unit} points={b.points} source={b.source} labels={b.labels} marks={b.marks} scale={b.scale} />;
           case "table":
             return (
               <figure key={i} className="panel overflow-x-auto" data-noswipe>
@@ -95,7 +95,7 @@ export function ArticleBlocks({ blocks, sentiment }: { blocks: Block[]; sentimen
                   <thead>
                     <tr>
                       {b.columns.map((c, j) => (
-                        <th key={j} className={`border-b border-line px-4 py-2 text-[12px] font-semibold text-fg-3 ${j ? "text-right" : "text-left"}`}>
+                        <th key={j} className={`whitespace-nowrap border-b border-line px-3 py-2 text-[12px] font-semibold text-fg-3 sm:px-4 ${j ? "text-right" : "text-left"}`}>
                           {c}
                         </th>
                       ))}
@@ -107,7 +107,7 @@ export function ArticleBlocks({ blocks, sentiment }: { blocks: Block[]; sentimen
                         {r.map((cell, k) => {
                           const tone = /^▲|^\+/.test(cell) ? "text-up" : /^▼|^[-−]/.test(cell) ? "text-down" : k ? "text-fg" : "text-fg-2";
                           return (
-                            <td key={k} className={`tabular px-4 py-2 ${k ? "text-right font-mono text-[13px]" : ""} ${tone}`}>
+                            <td key={k} className={`tabular whitespace-nowrap px-3 py-2 sm:px-4 ${k ? "text-right font-mono text-[13px]" : ""} ${tone}`}>
                               {cell}
                             </td>
                           );

@@ -1,4 +1,4 @@
-import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
+import type { MessageCreateParamsNonStreaming, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { z } from "zod";
 import type { Beat, CandidateMode, GeneratorMeta } from "@/db/schema";
 import { promptTokens, quickParams, usageCostUsd, type Effort, type TokenUsage } from "@/lib/ai/models";
@@ -11,6 +11,7 @@ import { TRUST_TIER_LABEL } from "@/lib/labels";
 import { numbersNotInSources } from "../checks";
 import { mockGenerator, sourceKind } from "./mock";
 import type { AssistAction, AssistResult, DraftGenerator, GenItem, GeneratedDraft } from "./types";
+import { DERIVED_PREFIX, loadImages, materialFromRead, photosOf, POST_READ_SYSTEM, PostRead, postReadPrompt, wantsPostRead, type PostVisual } from "./visual";
 
 /**
  * Claude-backed draft generator (DRAFT_GENERATOR=claude).
@@ -70,6 +71,17 @@ export interface ClaudeGeneratorOptions {
   now?: () => Date;
   /** the desk's 편집 노트 for a draft of this beat from these sources */
   lessons?: (ctx: { beat: Beat; sources: string[] }) => Promise<string[]>;
+  /** read social posts and their photos before drafting (null = off; see visual.ts) */
+  visuals?: VisualOptions | null | (() => Promise<VisualOptions | null>);
+}
+
+export interface VisualOptions {
+  /** the model that reads posts and photos */
+  model: string;
+  /** read photos at all (the desk's 사진 재가공 switch); posts without photos are still read */
+  photos: boolean;
+  /** photos and price history (tests: a fake) */
+  fetchImpl?: typeof fetch;
 }
 
 export class ClaudeCallError extends Error {
@@ -148,7 +160,7 @@ function clean(s: string | null | undefined, max: number): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-const SKIP_KEYS = new Set(["title", "summary", "html", "content", "text", "raw", "description", ...BODY_KEYS]);
+const SKIP_KEYS = new Set(["title", "summary", "html", "content", "text", "raw", "description", "images", "derived", ...BODY_KEYS]);
 
 /** Payload values worth showing the model (numbers, names, codes), minus long text it already has. */
 export function compactPayload(p: Record<string, unknown>, max = 1200): string {
@@ -208,12 +220,24 @@ export function promptItems(items: GenItem[]): { used: GenItem[]; signalOnly: nu
   return { used: usable.slice(0, MAX_ITEMS), signalOnly: items.length - usable.length, dropped: Math.max(0, usable.length - MAX_ITEMS) };
 }
 
-export function draftPrompt(input: { items: GenItem[]; beat: Beat; mode: CandidateMode; idea?: string | null; now: Date; lessons?: string[] }): string {
+/** For a claim from social media that we checked with market data (see visual.ts). */
+const FACT_CHECK_GUIDE = [
+  "이 기사는 SNS에서 도는 시장 속설을 데이터로 확인하는 가벼운 화제 기사입니다.",
+  "- 주장은 \"…라는 주장이 돌고 있다\"처럼 게시물을 출처로 밝혀 씁니다. 게시물 문장을 옮기지 않습니다.",
+  "- 제목은 재치 있게 써도 되지만 평서형으로, 확인한 결과를 담습니다. 물음표는 쓰지 않습니다.",
+  "- 수익률·가격은 NWM 계산 자료에 있는 값만 그대로 씁니다. 새로 계산하지 않습니다.",
+  "- 짚어볼 점(yes_but)에는 표본이 적다는 점, 우연의 일치일 수 있고 상관관계가 인과관계는 아니라는 점을 씁니다.",
+  "- 투자를 권하지 않습니다. 결론(bottom_line)에서 재미로 보는 지표라는 점을 밝힐 수 있습니다.",
+  "- 차트와 표는 시스템이 붙입니다. 본문에서 \"차트를 보면\"처럼 가리키지 않습니다.",
+];
+
+export function draftPrompt(input: { items: GenItem[]; beat: Beat; mode: CandidateMode; idea?: string | null; now: Date; lessons?: string[]; factCheck?: boolean }): string {
   const { used } = promptItems(input.items);
   const beat = BEATS[input.beat];
   const idea = clean(input.idea, 1000);
   const head = [`작성 시각: ${dateTimeKST(input.now)} (KST)`, `분야: ${beat.label} — ${beat.blurb}`, `작성 방식: ${MODE_LABEL[input.mode]}`];
   if (idea) head.push(`편집자 메모: ${idea}`);
+  if (input.factCheck) head.push("", ...FACT_CHECK_GUIDE);
   const lessons = (input.lessons ?? []).map((l) => clean(l, 200)).filter(Boolean);
   if (lessons.length) {
     head.push("", "편집 노트 — 편집자들이 지난 초안을 고친 방향입니다. 이번 초안에도 적용합니다(사실 원칙이 먼저입니다):", ...lessons.map((l) => `- ${l}`));
@@ -367,7 +391,7 @@ function errorText(e: unknown): string {
  */
 export async function callClaude<T>(
   o: Pick<ClaudeGeneratorOptions, "create" | "ledger">,
-  req: { purpose: string; model: string; user: string; schema: z.ZodType<T>; maxTokens: number; effort?: Effort; quick?: boolean; system?: string },
+  req: { purpose: string; model: string; user: MessageParam["content"]; schema: z.ZodType<T>; maxTokens: number; effort?: Effort; quick?: boolean; system?: string },
 ): Promise<{ out: T; usage: CallUsage }> {
   if (!o.create) throw new ClaudeCallError("ANTHROPIC_API_KEY가 없습니다");
   const format = outputFormat(req.schema);
@@ -435,35 +459,86 @@ async function withinBudget(o: ClaudeGeneratorOptions): Promise<string | null> {
   return spent >= o.budgetUsd ? `이번 달 AI 한도($${o.budgetUsd})를 다 써서` : null;
 }
 
+/* ───────────────────────── posts and photos ───────────────────────── */
+
+export type PostMaterial = PostVisual & { usage: CallUsage | null };
+
+/**
+ * Reads the post a story stands on (its photos too, when allowed) before the
+ * draft: a claim in our words, our own chart instead of the picture, and the
+ * claim checked against price history. null when the story does not need it.
+ */
+export async function readPost(o: Pick<ClaudeGeneratorOptions, "create" | "ledger">, items: GenItem[], v: VisualOptions, purpose = "draft"): Promise<PostMaterial | null> {
+  if (!wantsPostRead(items, v.photos)) return null;
+  const posts = items.filter((i) => i.social);
+  const post = (v.photos ? posts.find((i) => photosOf(i.payload).length) : undefined) ?? posts[0];
+  if (!post) return null;
+  const images = v.photos ? await loadImages(photosOf(post.payload), v.fetchImpl) : [];
+  const { out, usage } = await callClaude(o, {
+    purpose: `${purpose}:post`,
+    model: v.model,
+    system: POST_READ_SYSTEM,
+    user: [
+      ...images.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } })),
+      { type: "text" as const, text: postReadPrompt(post, images.length) },
+    ],
+    schema: PostRead,
+    maxTokens: 2000,
+  });
+  const material = await materialFromRead(out, post, images.length, v.fetchImpl);
+  if (photosOf(post.payload).length && !images.length && v.photos) material.notes.push("게시물 사진을 내려받지 못해 글만 읽었습니다");
+  return { ...material, usage };
+}
+
+const resolveVisuals = async (o: ClaudeGeneratorOptions): Promise<VisualOptions | null> => (typeof o.visuals === "function" ? o.visuals().catch(() => null) : (o.visuals ?? null));
+
 /** A draft from Claude, or a ClaudeCallError — no fallback. The comparison script uses this directly. */
 export async function writeDraft(
   o: ClaudeGeneratorOptions,
-  input: { items: GenItem[]; beat: Beat; mode: CandidateMode; idea?: string | null; lessons?: string[] },
+  input: { items: GenItem[]; beat: Beat; mode: CandidateMode; idea?: string | null; lessons?: string[]; post?: PostMaterial | null },
   purpose = "draft",
 ): Promise<GeneratedDraft & { usage: CallUsage }> {
   const now = (o.now ?? (() => new Date()))();
-  const { used, signalOnly, dropped } = promptItems(input.items);
-  const { out, usage } = await callClaude(o, {
+  const post = input.post ?? null;
+  // what we wrote ourselves goes first when the post itself may not be sent (signal-only)
+  const items = post?.items.length ? [...input.items.filter((i) => !i.signalOnly), ...post.items, ...input.items.filter((i) => i.signalOnly)] : input.items;
+  const { used, signalOnly, dropped } = promptItems(items);
+  const { out, usage: draftUsage } = await callClaude(o, {
     purpose,
     model: o.model,
-    user: draftPrompt({ ...input, now }),
+    user: draftPrompt({ ...input, items, now, factCheck: post?.factCheck }),
     schema: DraftOut,
     maxTokens: 16000,
     effort: o.effort,
   });
+  const usage: CallUsage = post?.usage
+    ? {
+        ...draftUsage,
+        inputTokens: draftUsage.inputTokens + post.usage.inputTokens,
+        outputTokens: draftUsage.outputTokens + post.usage.outputTokens,
+        costUsd: draftUsage.costUsd + post.usage.costUsd,
+      }
+    : draftUsage;
 
   let assembled: ReturnType<typeof assembleDraft>;
+  let draft: Draft;
   try {
     assembled = assembleDraft(out, used);
+    draft = assembled.draft;
+    if (post?.blocks.length) {
+      // our chart and table go right after the key points
+      const at = draft.blocks.reduce((n, b, i) => (b.type === "why" || b.type === "numbers" ? i + 1 : n), 0);
+      draft = draftSchema.parse({ ...draft, blocks: [...draft.blocks.slice(0, at), ...post.blocks, ...draft.blocks.slice(at)] });
+    }
   } catch (e) {
     throw new ClaudeCallError(`초안을 블록 형식으로 바꾸지 못했습니다: ${errorText(e)}`, usage);
   }
-  const { draft } = assembled;
   const unmatched = used.length ? numbersNotInSources(draft, used) : [];
 
   const notes = [
     // " · " separates notes in the editor
     ...lines(out.notes, 160, 4).map((n) => n.replace(/\s+·\s+/g, ", ")),
+    ...(post?.notes ?? []),
     ...assembled.notes,
     unmatched.length ? `원문에서 찾지 못한 수치 ${unmatched.length}건: ${unmatched.slice(0, 5).join(", ")} — 확인 필요` : null,
     signalOnly ? `신호 전용 소스 ${signalOnly}건은 AI에 보내지 않았습니다 — 1차 자료로 확인하세요` : null,
@@ -481,7 +556,9 @@ export async function writeDraft(
     model: usage.model,
     usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costUsd: usage.costUsd },
   };
-  return { draft, aiNote: notes.length ? notes.join(" · ") : null, meta, usage };
+  // computed data the draft cites is saved with the candidate (the claim summary is ours to rewrite, not to keep)
+  const derived = (post?.items ?? []).filter((i) => i.id.startsWith(DERIVED_PREFIX) && i.payload.derived);
+  return { draft, aiNote: notes.length ? notes.join(" · ") : null, meta, usage, ...(derived.length ? { derived } : {}) };
 }
 
 /* ───────────────────────── assists ───────────────────────── */
@@ -680,13 +757,24 @@ export function createClaudeGenerator(o: ClaudeGeneratorOptions): DraftGenerator
         const g = await fallback.draftFromItems(input);
         return { ...g, aiNote: [`${why} 모의 초안으로 대신했습니다`, g.aiNote].filter(Boolean).join(" · ") };
       };
-      if (!input.items.some((i) => !i.signalOnly) && !input.idea?.trim()) return viaMock("신호 전용 자료뿐이라 AI에 보내지 않고");
       const blocked = await withinBudget(o);
+      const visuals = blocked ? null : await resolveVisuals(o);
+      // a story that stands on social posts is read first: the claim in our words, our chart, the numbers
+      let post: PostMaterial | null = null;
+      let postFailed: string | null = null;
+      if (visuals) {
+        try {
+          post = await readPost(o, input.items, visuals);
+        } catch (e) {
+          postFailed = `게시물 판독 실패(${errorText(e)})`;
+        }
+      }
+      if (!input.items.some((i) => !i.signalOnly) && !input.idea?.trim() && !post?.items.length) return viaMock("신호 전용 자료뿐이라 AI에 보내지 않고");
       if (blocked) return viaMock(blocked);
       try {
         const lessons = o.lessons ? await o.lessons({ beat: input.beat, sources: [...new Set(input.items.map((i) => i.sourceName))] }).catch(() => []) : [];
-        const { draft, aiNote, meta } = await writeDraft(o, { ...input, lessons });
-        return { draft, aiNote, meta };
+        const { draft, aiNote, meta, derived } = await writeDraft(o, { ...input, lessons, post });
+        return { draft, aiNote: [aiNote, postFailed].filter(Boolean).join(" · ") || null, meta, ...(derived ? { derived } : {}) };
       } catch (e) {
         return viaMock(`AI 초안 실패(${errorText(e)}) —`);
       }

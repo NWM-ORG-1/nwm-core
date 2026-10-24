@@ -21,6 +21,7 @@ import { ymdKST } from "@/lib/format";
 import { logActivity } from "./activity";
 import { blockingFailures, runChecks, type CheckItem } from "./checks";
 import type { GenItem } from "./generator/types";
+import { SOCIAL_ADAPTERS } from "./generator/visual";
 import { newArticleSlug } from "./slug";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -60,6 +61,7 @@ export interface CandidateItemRow {
     id: string;
     name: string;
     kind: string;
+    adapter: string;
     trustTier: number;
     signalOnly: boolean;
     licCommercialOk: boolean | null;
@@ -89,6 +91,7 @@ export async function loadCandidateItems(q: Q, candidateId: string): Promise<Can
         id: feedSources.id,
         name: feedSources.name,
         kind: feedSources.kind,
+        adapter: feedSources.adapter,
         trustTier: feedSources.trustTier,
         signalOnly: feedSources.signalOnly,
         licCommercialOk: feedSources.licCommercialOk,
@@ -121,6 +124,7 @@ export function toGenItem(r: CandidateItemRow): GenItem {
     payload: r.payload,
     url: r.url,
     publishedAt: r.publishedAt,
+    social: SOCIAL_ADAPTERS.has(r.source.adapter),
   };
 }
 
@@ -401,6 +405,7 @@ export async function loadItemsByIds(q: Q, ids: string[]) {
         id: feedSources.id,
         name: feedSources.name,
         kind: feedSources.kind,
+        adapter: feedSources.adapter,
         trustTier: feedSources.trustTier,
         signalOnly: feedSources.signalOnly,
         experimentId: feedSources.experimentId,
