@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CheckResult } from "@/db/schema";
 import type { Draft } from "@/lib/content/blocks";
-import { cardKeyboard, cardText, escapeHtml, openChecks, parseCallback, parseQuickEdits, REJECT_REASONS, type CardInput } from "@/server/telegram/format";
+import { ago, cardKeyboard, cardText, escapeHtml, openChecks, parseCallback, parseQuickEdits, REJECT_REASONS, statusText, type CardInput, type StatusSnapshot } from "@/server/telegram/format";
 
 /* fixtures — fictional companies only */
 const ID = "3f2b7c1e-8a4d-4f6b-9c2e-1d5a7b9c0e12";
@@ -92,5 +92,55 @@ describe("telegram buttons", () => {
     assert.equal(parseQuickEdits("제목: 새 제목\n둘째 단락은 빼 줘"), null);
     assert.equal(parseQuickEdits("더 짧게"), null);
     assert.equal(parseQuickEdits("   "), null);
+  });
+});
+
+describe("/status", () => {
+  const NOW = new Date("2026-10-24T07:55:00Z"); // 16:55 KST
+  const minus = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+  const snap = (over: Partial<StatusSnapshot> = {}): StatusSnapshot => ({
+    workerBeatAt: minus(12_000),
+    sources: { active: 22, paused: 3, error: 0, failing: [] },
+    items: { hour: 18, day: 412, lastCheckAt: minus(60_000), lastNewAt: minus(300_000) },
+    desk: { enabled: true, cadenceMin: 60, dailyDrafts: 10, draftedToday: 3, queued: 2, lastRun: { at: minus(14 * 60_000), seen: 12, stories: 4, drafted: 1, error: null }, spendUsd: 4.21, budgetUsd: 40, allUsd: 6.03, capUsd: 50 },
+    newsroom: { review: 5, scheduled: 1, publishedToday: 2 },
+    lessons: { notes: 3, waiting: 1 },
+    ...over,
+  });
+
+  it("reads at a glance when everything runs", () => {
+    assert.equal(
+      statusText(snap(), NOW),
+      [
+        "📡 <b>뉴웹미디어 상태</b> · 10월 24일 (토) 16:55",
+        "",
+        "<b>워커</b> ✅ 정상 · 신호 12초 전",
+        "<b>수집</b> 소스 22개 작동 · 쉼 3",
+        " 새 자료 1시간 18건 · 24시간 412건 · 마지막 확인 1분 전",
+        "<b>AI 데스크</b> 켜짐 · 1시간마다 · 오늘 초안 3/10 · 대기 2",
+        " 마지막 실행 14분 전 — 자료 12건 · 사건 4건 · 초안 1건",
+        " 이번 달 $4.21 / $40.00 · 뉴스룸 전체 $6.03 / $50.00",
+        "<b>뉴스룸</b> 검토 대기 5 · 예약 1 · 오늘 발행 2",
+        "<b>편집 노트</b> 3개 · 고친 초안 1건 대기",
+      ].join("\n"),
+    );
+  });
+
+  it("puts warnings first in the line: a quiet worker, failing sources, a failed run, a spent budget", () => {
+    const t = statusText(
+      snap({
+        workerBeatAt: minus(9 * 60_000),
+        sources: { active: 21, paused: 3, error: 1, failing: [{ name: "가상부 <보도자료>", error: "HTTP 503 Service Unavailable", lastSuccessAt: minus(3 * 3_600_000) }] },
+        desk: { ...snap().desk, enabled: false, lastRun: { at: minus(2 * 86_400_000), seen: 0, stories: 0, drafted: 0, error: "ANTHROPIC_API_KEY가 없습니다" }, spendUsd: 40 },
+      }),
+      NOW,
+    );
+    assert.match(t, /^<b>워커<\/b> ⚠️ 신호 없음 · 마지막 9분 전/m);
+    assert.match(t, /^<b>수집<\/b> 소스 21개 작동 · ⚠️ 오류 1 · 쉼 3$/m);
+    assert.match(t, /^ ⚠️ 가상부 &lt;보도자료&gt; — HTTP 503 Service Unavailable \(마지막 성공 3시간 전\)$/m, "escaped");
+    assert.match(t, /^<b>AI 데스크<\/b> 꺼짐 · 오늘 초안/m);
+    assert.match(t, /^ ⚠️ 마지막 실행 2일 전 실패 — ANTHROPIC_API_KEY가 없습니다$/m);
+    assert.match(t, /^ ⚠️ 이번 달 \$40\.00 \/ \$40\.00/m);
+    assert.equal(ago(null, NOW), "기록 없음");
   });
 });

@@ -24,10 +24,12 @@ import {
   parseCallback,
   parseQuickEdits,
   REJECT_REASONS,
+  statusText,
   type CardInput,
   type CardOutcome,
 } from "./format";
 import { linkedEditor, linkWithCode, unlinkTelegram } from "./links";
+import { loadStatus } from "./status";
 
 /**
  * The newsroom bot: cards for drafts in 검토, and what editors do with them.
@@ -413,6 +415,11 @@ async function onMessage(d: BotDeps, m: TgMessage): Promise<Later | null> {
   }
   if (text === "/help" || !text) {
     await send(d, chatId, HELP);
+    return null;
+  }
+  if (/^\/status(@\w+)?$/.test(text) || text === "상태") {
+    const now = new Date();
+    await send(d, chatId, statusText(await loadStatus(d.db, now), now));
     return null;
   }
 

@@ -1,5 +1,6 @@
 import type { Beat, CandidateMode, CheckResult } from "@/db/schema";
 import { BEATS } from "@/lib/beats";
+import { clockKST, dateKST } from "@/lib/format";
 import { BLOCK_TITLE_KO, SECTION_LABEL_KO, type Block, type Draft } from "@/lib/content/blocks";
 import { CHECK_META } from "../checks";
 import type { InlineKeyboard } from "./api";
@@ -228,7 +229,88 @@ export const HELP = [
   "• ✅ 발행: 법률 검토를 확인하고 바로 발행합니다.",
   "• ✏️ 수정: 답장으로 고칠 내용을 보내면 반영한 새 카드를 보냅니다.",
   "• 🗑 반려: 사유를 고르거나 적습니다.",
+  "/status 수집·AI 데스크·뉴스룸 상태",
   "/stop 연결 끊기",
 ].join("\n");
+
+/** The bot's command menu in Telegram (setMyCommands). */
+export const BOT_COMMANDS = [
+  { command: "status", description: "수집·AI 데스크·뉴스룸 상태" },
+  { command: "help", description: "도움말" },
+  { command: "stop", description: "연결 끊기" },
+];
+
+/* ───────────────────────── /status ───────────────────────── */
+
+export interface StatusSnapshot {
+  workerBeatAt: string | null;
+  sources: { active: number; paused: number; error: number; failing: Array<{ name: string; error: string | null; lastSuccessAt: string | null }> };
+  items: { hour: number; day: number; lastCheckAt: string | null; lastNewAt: string | null };
+  desk: {
+    enabled: boolean;
+    cadenceMin: number;
+    dailyDrafts: number;
+    draftedToday: number;
+    queued: number;
+    lastRun: { at: string; seen: number; stories: number; drafted: number; error: string | null } | null;
+    spendUsd: number;
+    budgetUsd: number;
+    allUsd: number;
+    capUsd: number;
+  };
+  newsroom: { review: number; scheduled: number; publishedToday: number };
+  lessons: { notes: number; waiting: number };
+}
+
+/** "12초 전", "3분 전", "2시간 전", "4일 전" */
+export function ago(iso: string | null, now: Date): string {
+  if (!iso) return "기록 없음";
+  const s = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s}초 전`;
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}시간 전`;
+  return `${Math.floor(s / 86_400)}일 전`;
+}
+
+const usd = (n: number) => `$${n.toFixed(2)}`;
+/** the worker beats every 30 seconds */
+const WORKER_QUIET_MS = 3 * 60_000;
+
+export function statusText(s: StatusSnapshot, now: Date): string {
+  const at = `${dateKST(now)} ${clockKST(now)}`;
+  const alive = s.workerBeatAt != null && now.getTime() - Date.parse(s.workerBeatAt) < WORKER_QUIET_MS;
+  const lines = [`📡 <b>뉴웹미디어 상태</b> · ${escapeHtml(at)}`, ""];
+
+  lines.push(alive ? `<b>워커</b> ✅ 정상 · 신호 ${ago(s.workerBeatAt, now)}` : `<b>워커</b> ⚠️ 신호 없음 · 마지막 ${ago(s.workerBeatAt, now)} — Railway worker 서비스를 확인하세요`);
+
+  const src = s.sources;
+  lines.push(`<b>수집</b> 소스 ${src.active}개 작동${src.error ? ` · ⚠️ 오류 ${src.error}` : ""}${src.paused ? ` · 쉼 ${src.paused}` : ""}`);
+  lines.push(` 새 자료 1시간 ${s.items.hour}건 · 24시간 ${s.items.day}건 · 마지막 확인 ${ago(s.items.lastCheckAt, now)}`);
+  for (const f of src.failing.slice(0, 3)) {
+    lines.push(` ⚠️ ${escapeHtml(f.name)} — ${escapeHtml(clipLine(f.error ?? "오류", 80))} (마지막 성공 ${ago(f.lastSuccessAt, now)})`);
+  }
+
+  const d = s.desk;
+  const cadence = d.cadenceMin < 60 ? `${d.cadenceMin}분마다` : `${d.cadenceMin / 60}시간마다`;
+  lines.push(`<b>AI 데스크</b> ${d.enabled ? `켜짐 · ${cadence}` : "꺼짐"} · 오늘 초안 ${d.draftedToday}/${d.dailyDrafts} · 대기 ${d.queued}`);
+  if (d.lastRun) {
+    lines.push(
+      d.lastRun.error
+        ? ` ⚠️ 마지막 실행 ${ago(d.lastRun.at, now)} 실패 — ${escapeHtml(clipLine(d.lastRun.error, 100))}`
+        : ` 마지막 실행 ${ago(d.lastRun.at, now)} — 자료 ${d.lastRun.seen}건 · 사건 ${d.lastRun.stories}건 · 초안 ${d.lastRun.drafted}건`,
+    );
+  } else lines.push(" 아직 실행 기록이 없습니다");
+  const broke = d.spendUsd >= d.budgetUsd || d.allUsd >= d.capUsd;
+  lines.push(` ${broke ? "⚠️ " : ""}이번 달 ${usd(d.spendUsd)} / ${usd(d.budgetUsd)} · 뉴스룸 전체 ${usd(d.allUsd)} / ${usd(d.capUsd)}`);
+
+  lines.push(`<b>뉴스룸</b> 검토 대기 ${s.newsroom.review} · 예약 ${s.newsroom.scheduled} · 오늘 발행 ${s.newsroom.publishedToday}`);
+  lines.push(`<b>편집 노트</b> ${s.lessons.notes}개 · 고친 초안 ${s.lessons.waiting}건 대기`);
+  return lines.join("\n");
+}
+
+function clipLine(t: string, max: number): string {
+  const s = t.replace(/\s+/g, " ").trim();
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
 
 export const NOT_LINKED = "연결되지 않은 텔레그램 계정입니다. 뉴스룸 → 설정 → 텔레그램에서 연결 링크를 만들어 여세요.";

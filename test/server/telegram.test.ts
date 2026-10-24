@@ -321,4 +321,18 @@ describe("newsroom bot", { skip: !enabled && "DATABASE_URL not set" }, () => {
     assert.equal(cand?.status, "review");
     assert.equal(cand?.checks.find((c) => c.id === "legal")?.ok ?? false, false);
   });
+
+  it("answers /status for a linked editor only", async () => {
+    const before = fake.calls.length;
+    await handleUpdate(deps(), msg(USER, "/status"));
+    const [reply] = fake.since(before);
+    assert.equal(reply.method, "sendMessage");
+    assert.match(reply.params.text!, /^📡 <b>뉴웹미디어 상태<\/b>/);
+    assert.match(reply.params.text!, /\n<b>수집<\/b> 소스 \d+개 작동/);
+    assert.match(reply.params.text!, /\n<b>AI 데스크<\/b> /);
+    assert.match(reply.params.text!, /\n<b>뉴스룸<\/b> 검토 대기 [1-9]\d* · 예약 \d+ · 오늘 발행 \d+/, "this test's drafts are waiting in 검토");
+    const mark = fake.calls.length;
+    await handleUpdate(deps(), msg(STRANGER, "/status"));
+    assert.equal(fake.since(mark)[0].params.text, NOT_LINKED);
+  });
 });

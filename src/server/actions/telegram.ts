@@ -10,6 +10,7 @@ import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
 import { NewsroomError } from "../newsroom";
 import { newsroomBotToken, telegramClient, TelegramError, webhookSecret, type TgClient } from "../telegram/api";
+import { BOT_COMMANDS } from "../telegram/format";
 import { createLinkCode, unlinkTelegram } from "../telegram/links";
 import { fail, ok, type ActionState } from "./result";
 
@@ -32,6 +33,7 @@ export async function createTelegramLink(): Promise<ActionState<{ url: string; e
     const { token, tg } = bot();
     if (!SITE.url.startsWith("https://")) throw new NewsroomError("텔레그램 웹훅은 https 주소만 받습니다 (NEXT_PUBLIC_SITE_URL).", "invalid");
     await tg.call("setWebhook", { url: `${SITE.url}/api/telegram`, secret_token: webhookSecret(token), allowed_updates: ["message", "callback_query"] });
+    await tg.call("setMyCommands", { commands: BOT_COMMANDS });
     const info = await tg.call<{ username: string }>("getMe", {});
     const { code, expiresAt } = await createLinkCode(db, me.id);
     return ok(undefined, { url: `https://t.me/${info.username}?start=${code}`, expiresAt: expiresAt.toISOString() });
