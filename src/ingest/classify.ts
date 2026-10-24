@@ -109,9 +109,29 @@ export function scoreItem(i: ScoreInput): number {
 }
 
 /** Free-text keyword filter used by many adapters' configs. */
+/**
+ * Short Latin words ("AI", "DMA", "ETF") match as whole words — otherwise "AI" is in "said";
+ * anything else matches anywhere; "/…/" is a regular expression (e.g. "/\\drc\\d/" for release candidates).
+ */
+const SHORT_WORD = /^[a-z0-9][a-z0-9.+#-]{0,3}$/i;
+function hasKeyword(lower: string, word: string): boolean {
+  const raw = word.trim();
+  if (raw.length > 2 && raw.startsWith("/") && raw.endsWith("/")) {
+    try {
+      return new RegExp(raw.slice(1, -1), "i").test(lower);
+    } catch {
+      return false;
+    }
+  }
+  const w = raw.toLowerCase();
+  if (!w) return false;
+  if (!SHORT_WORD.test(w)) return lower.includes(w);
+  return new RegExp(`(^|[^a-z0-9])${w.replace(/[.+#-]/g, "\\$&")}(?![a-z0-9])`).test(lower);
+}
+
 export function passesKeywords(text: string, include?: string[], exclude?: string[]): boolean {
   const t = text.toLowerCase();
-  if (exclude?.some((w) => w && t.includes(w.toLowerCase()))) return false;
-  if (include?.length) return include.some((w) => w && t.includes(w.toLowerCase()));
+  if (exclude?.some((w) => hasKeyword(t, w))) return false;
+  if (include?.length) return include.some((w) => hasKeyword(t, w));
   return true;
 }

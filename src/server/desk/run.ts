@@ -4,7 +4,6 @@ import type { DB } from "@/db/client";
 import { aiUsage, articles, candidateItems, candidates, deskDecisions, deskRuns, feedItems, feedSources, type Beat, type DeskDecision, type DeskScores } from "@/db/schema";
 import type { Effort } from "@/lib/ai/models";
 import { mapLimit } from "@/lib/ai/limit";
-import { CRYPTO_LOW_PROFILE } from "@/lib/beats";
 import { logActivity } from "../activity";
 import { runChecks, similarity, type CheckItem } from "../checks";
 import { ClaudeCallError, readPost, writeDraft, type CreateCall, type PostMaterial, type UsageLedger } from "../generator/claude";
@@ -41,7 +40,6 @@ export const QUEUE_HOURS = 12;
 /** a story this far under the bar may still be drafted as an exploration pick */
 const NEAR_POINTS = 10;
 const DUPLICATE_SIMILARITY = 0.6;
-const CRYPTO_REASON = "등록 심사 기간: 크립토 제외";
 const HOUR = 3_600_000;
 const CLAIM_LOST = new Error("claim lost");
 
@@ -241,10 +239,10 @@ async function judgeNew(d: DeskDeps, runId: string, settings: DeskSettings, rows
   };
 
   const stale = new Set(rows.filter((r) => r.publishedAt && now.getTime() - r.publishedAt.getTime() > STALE_HOURS * HOUR).map((r) => r.id));
-  const crypto = new Set(CRYPTO_LOW_PROFILE ? rows.filter((r) => r.beatGuess === "crypto" && !stale.has(r.id)).map((r) => r.id) : []);
+  // crypto is judged like any beat: during the registration review the newsroom tests and does not publish,
+  // and the public site's low profile (NEXT_PUBLIC_CRYPTO_LOW_PROFILE) is a separate switch
   skipAll(rows.filter((r) => stale.has(r.id)), `${STALE_HOURS}시간이 지난 자료`, null);
-  skipAll(rows.filter((r) => crypto.has(r.id)), CRYPTO_REASON, "crypto");
-  const fresh = rows.filter((r) => !stale.has(r.id) && !crypto.has(r.id));
+  const fresh = rows.filter((r) => !stale.has(r.id));
   const byId = new Map(rows.map((r) => [r.id, r]));
 
   if (fresh.length) {
@@ -260,7 +258,7 @@ async function judgeNew(d: DeskDeps, runId: string, settings: DeskSettings, rows
           model,
           topics,
           recentTitles: recent,
-          excludeBeats: CRYPTO_LOW_PROFILE ? ["crypto(크립토)"] : [],
+          excludeBeats: [],
         });
       } catch (e) {
         if (!(e instanceof ClaudeCallError)) throw e;
@@ -283,8 +281,7 @@ async function judgeNew(d: DeskDeps, runId: string, settings: DeskSettings, rows
 
         let decision: DeskDecision = story.decision;
         let reason = story.reason;
-        if (CRYPTO_LOW_PROFILE && story.beat === "crypto") [decision, reason] = ["skip", CRYPTO_REASON];
-        else if (decision !== "skip" && isDuplicate([story.angle, usable[0]?.title ?? items[0].title], recent)) [decision, reason] = ["skip", `최근 기사·초안과 겹침 — ${reason}`];
+        if (decision !== "skip" && isDuplicate([story.angle, usable[0]?.title ?? items[0].title], recent)) [decision, reason] = ["skip", `최근 기사·초안과 겹침 — ${reason}`];
         else if (decision !== "skip" && usable.length && usable.every((r) => r.source.licCommercialOk === false)) [decision, reason] = ["skip", "상업 이용이 안 되는 출처뿐"];
         // social posts alone may still become a fact-check: the drafting step reads them and holds what it cannot check
         else if (decision === "draft" && !usable.length && !items.every(isSocial)) [decision, reason] = ["hold", `1차 자료 확인 필요 — ${reason}`];

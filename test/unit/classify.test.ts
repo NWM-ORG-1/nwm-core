@@ -44,6 +44,20 @@ describe("scoreItem", () => {
 });
 
 describe("passesKeywords", () => {
+  it("matches short Latin words as whole words, longer ones and Korean anywhere", () => {
+    assert.equal(passesKeywords("Commissioner said the chair would rule", ["AI"]), false, "AI is not in said/chair");
+    assert.equal(passesKeywords("EU fines Apple under the DMA", ["AI", "DMA"]), true);
+    assert.equal(passesKeywords("New AI-powered search", ["AI"]), true);
+    assert.equal(passesKeywords("OpenAI's AI Act filing", ["ai act"]), true);
+    assert.equal(passesKeywords("Cryptocurrency exchange fined", ["crypto"]), true, "longer words still match inside words");
+    assert.equal(passesKeywords("가상자산사업자 신고", ["가상자산"]), true);
+    assert.equal(passesKeywords("v0.32.1rc0 released", undefined, ["rc"]), true, "rc only as a word");
+    assert.equal(passesKeywords("v0.32.1 rc build", undefined, ["rc"]), false);
+    assert.equal(passesKeywords("v0.32.1rc0", undefined, ["/\\drc\\d/"]), false, "a regular expression for release candidates");
+    assert.equal(passesKeywords("v0.32.1", undefined, ["/\\drc\\d/"]), true);
+    assert.equal(passesKeywords("anything", ["/[/"]), false, "a broken expression matches nothing");
+  });
+
   it("applies include and exclude case-insensitively", () => {
     assert.equal(passesKeywords("New LLM Agent", ["llm"], ["crypto"]), true);
     assert.equal(passesKeywords("LLM for crypto", ["llm"], ["crypto"]), false);

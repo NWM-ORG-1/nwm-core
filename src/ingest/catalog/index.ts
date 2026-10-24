@@ -1,4 +1,5 @@
 import type { Beat } from "@/db/schema";
+import { FIRSTHAND } from "./firsthand";
 
 /**
  * Sources the newsroom starts with. `npm run sources:sync` (and the worker at
@@ -16,7 +17,7 @@ export interface CatalogSource {
   adapter: string;
   url?: string;
   beats: Beat[];
-  lang: "ko" | "en";
+  lang: "ko" | "en" | "ja";
   /** 1 official/primary · 2 reputable · 3 community · 4 unverified */
   trustTier: 1 | 2 | 3 | 4;
   signalOnly?: boolean;
@@ -81,7 +82,7 @@ const COMMUNITY_LICENSE = {
   retentionDays: 120,
 };
 
-export const CATALOG: CatalogSource[] = [
+const BASE: CatalogSource[] = [
   /* ── official · Korea ── */
   {
     slug: "bok-stat-press",
@@ -653,3 +654,6 @@ export const CATALOG: CatalogSource[] = [
     license: COMMUNITY_LICENSE,
   },
 ];
+
+/** everything the newsroom starts with: the first set, then where stories first appear (firsthand.ts) */
+export const CATALOG: CatalogSource[] = [...BASE, ...FIRSTHAND];
