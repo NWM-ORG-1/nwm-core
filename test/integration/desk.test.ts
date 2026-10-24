@@ -27,6 +27,7 @@ const T = {
   f: "누리AI랩, 서울 연구소 개소",
   g: "가상부, 반도체 인허가 기간 절반으로 단축",
   h: "가상부, 수출기업 대상 설명회 개최",
+  i: "가상체인, 메인넷 출시 일정 공개",
 };
 
 const draftOut: DraftOut = {
@@ -310,5 +311,19 @@ describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
     const off = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "schedule", globalCapUsd: 1000, settings: settings({ enabled: false }) });
     assert.equal(off.runId, null);
     assert.equal(off.note, "꺼짐");
+  });
+
+  it("leaves a channel without its operator's consent to the editors", async () => {
+    const [{ id: channel }] = await db
+      .insert(feedSources)
+      .values({ slug: `${PREFIX}tg-noconsent`, name: "가상 텔레그램 채널", kind: "scrape", adapter: "telegram.channel", trustTier: 2, config: { channel: "itest_desk_channel", llmConsent: false } })
+      .returning({ id: feedSources.id });
+    const id = await addItem("i", { source: channel, summary: "가상체인이 다음 달 메인넷을 연다.", beat: "tech" });
+    const { create, calls } = fakeClaude((n) => [story({ items: [n(T.i)], decision: "draft", reason: "보면 안 되는 자료" })]);
+    await run(create, settings());
+    assert.ok(calls.every((c) => !c.user.includes(T.i)), "the model never sees it");
+    const row = await db.query.feedItems.findFirst({ where: eq(feedItems.id, id) });
+    assert.equal(row?.status, "new");
+    assert.equal(row?.deskDecisionId, null);
   });
 });

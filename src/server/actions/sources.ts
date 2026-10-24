@@ -5,10 +5,14 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { experiments, feedSources } from "@/db/schema";
+import { collectorEnv } from "@/data/admin-ingest";
 import { validateConfig } from "@/ingest/execute";
 import { getAdapter } from "@/ingest/registry";
+import { parseHandles, type SocialKind } from "@/ingest/social-handles";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
+import { NewsroomError } from "../newsroom";
+import { addSocialSourcesAs, previewSocial, SOCIAL_BATCH, type AddSocialResult, type SocialPreview } from "../social-sources";
 import { fail, ok, type ActionState } from "./result";
 
 const tri = z.enum(["yes", "no", "unknown"]).transform((v) => (v === "yes" ? true : v === "no" ? false : null));
@@ -121,6 +125,70 @@ export async function setSourceStatus(input: { id: string; status: "active" | "p
     await logActivity(db, { actorId: me.id, kind: "source", entityType: "source", entityId: p.id, summary: p.status === "active" ? "수집 재개" : "수집 일시정지" });
     refresh();
     return ok(p.status === "active" ? "수집을 재개했습니다." : "수집을 멈췄습니다.");
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ───────────────────────── 텔레그램·X 연결 ───────────────────────── */
+
+const socialKind = z.enum(["telegram", "x"]);
+
+export interface SocialCheck {
+  kind: SocialKind;
+  items: SocialPreview[];
+  rejected: Array<{ input: string; reason: string }>;
+  /** X: the collector has no key yet — sources can be added but read nothing until it does */
+  keyMissing?: string;
+}
+
+/** Reads what was pasted and looks each channel/account up (nothing saved). */
+export async function checkSocialSources(input: { kind: SocialKind; text: string }): Promise<ActionState<SocialCheck>> {
+  try {
+    await requireStaff();
+    const p = z.object({ kind: socialKind, text: z.string().max(20_000) }).parse(input);
+    const parsed = parseHandles(p.kind, p.text, SOCIAL_BATCH[p.kind]);
+    const items = parsed.names.length ? await previewSocial(db, p.kind, parsed.names) : [];
+    const keyMissing = p.kind === "x" && !(await collectorEnv()).env.X_BEARER_TOKEN?.trim() ? "X_BEARER_TOKEN" : undefined;
+    return ok(undefined, { kind: p.kind, items, rejected: parsed.rejected, keyMissing });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+const socialForm = z.object({
+  kind: socialKind,
+  entries: z
+    .array(z.object({ name: z.string().trim().min(1).max(64), title: z.string().trim().max(200).optional() }))
+    .min(1)
+    .max(50),
+  beats: z.array(z.enum(["ai", "crypto", "economy", "tech", "sentiment"])).default([]),
+  lang: z.enum(["ko", "en", "ja", "zh"]),
+  trustTier: z.number().int().min(1).max(4),
+  signalOnly: z.boolean(),
+  output: z.array(z.enum(["items", "posts"])).min(1),
+  llmConsent: z.boolean().default(false),
+});
+
+/** One source per channel/account, collecting at once (the worker picks new sources up within seconds). */
+export async function addSocialSources(input: z.input<typeof socialForm>): Promise<ActionState<AddSocialResult>> {
+  try {
+    const me = await requireStaff();
+    const p = socialForm.parse(input);
+    // only names the parser accepts reach the database
+    const entries = p.entries.flatMap((e) => {
+      const [name] = parseHandles(p.kind, e.name, 1).names;
+      return name ? [{ name, title: e.title }] : [];
+    });
+    if (entries.length !== p.entries.length) throw new NewsroomError("채널·계정 이름을 다시 확인하세요.", "invalid");
+    const r = await addSocialSourcesAs(db, me, { ...p, entries });
+    refresh();
+    const done = r.added.length + r.resumed.length;
+    const waitsForKey = p.kind === "x" && !(await collectorEnv()).env.X_BEARER_TOKEN?.trim();
+    return ok(
+      !done ? "새로 추가한 소스가 없습니다." : waitsForKey ? `${done}개 소스를 추가했습니다. X 키를 넣으면 수집을 시작합니다.` : `${done}개 소스가 수집을 시작합니다.`,
+      r,
+    );
   } catch (e) {
     return fail(e);
   }

@@ -26,9 +26,14 @@ export default function SourcesPage() {
         title="소스"
         description="정보 피드를 공급하는 소스와 이용 조건을 관리합니다. 소스는 실험(가설)별로 묶여 있어 어떤 수집 전략이 실제 발행으로 이어지는지 비교할 수 있습니다."
         actions={
-          <Link href="/admin/sources/new" className={cx(btn.base, btn.primary)}>
-            ＋ 소스 추가
-          </Link>
+          <>
+            <Link href="/admin/sources/connect" className={cx(btn.base, btn.ghost)}>
+              텔레그램·X 연결
+            </Link>
+            <Link href="/admin/sources/new" className={cx(btn.base, btn.primary)}>
+              ＋ 소스 추가
+            </Link>
+          </>
         }
       />
       <Suspense fallback={<SourcesSkeleton />}>

@@ -1,15 +1,18 @@
 import { parse } from "node-html-parser";
 import { z } from "zod";
 import { passesKeywords } from "../../classify";
-import { clip, htmlToText, parseCount, parseDate } from "../../text";
+import { clip, htmlToText, oneLine, parseCount, parseDate } from "../../text";
 import { ConfigError, defineAdapter, type IngestItem, type SocialPostIn } from "../../types";
 
 /**
  * Telegram channels the editors chose.
  *  - telegram.channel: the public web preview (t.me/s/<channel>), no account needed
  *  - telegram.bot: channels where our bot was added as an admin (consent built in)
- * Telegram's terms forbid using channel content for AI/ML without consent, so
- * LLM scoring stays off unless the source records the operator's consent.
+ * Telegram's terms (Content Licensing and AI Scraping, telegram.org/tos/content-licensing,
+ * since 2026-02) forbid collecting channel content or feeding it to AI without the
+ * operator's explicit consent for that channel. The newsroom gets that consent
+ * itself and records it per source in `llmConsent`; without it, no model sees
+ * the channel (no sentiment scoring, no AI desk).
  */
 
 const output = z.array(z.enum(["items", "posts"])).min(1).default(["items"]);
@@ -56,6 +59,31 @@ export function parseChannelPage(html: string, channel: string): { messages: TgM
   }
   const before = Number(root.querySelector(".tme_messages_more[data-before]")?.getAttribute("data-before"));
   return { messages, before: Number.isFinite(before) ? before : undefined };
+}
+
+export interface TgChannelInfo {
+  title?: string;
+  username?: string;
+  subscribers?: number;
+  description?: string;
+}
+
+/** The channel card at the top of a t.me/s page (title, @name, subscribers); the page title stands in for it. */
+export function parseChannelInfo(html: string): TgChannelInfo {
+  const root = parse(html);
+  const title =
+    root.querySelector(".tgme_channel_info_header_title")?.textContent.trim() ||
+    root.querySelector('meta[property="og:title"]')?.getAttribute("content")?.trim() ||
+    root.querySelector("title")?.textContent.replace(/\s+–\s+Telegram$/, "").trim() ||
+    undefined;
+  const username = root.querySelector(".tgme_channel_info_header_username a")?.textContent.trim().replace(/^@/, "") || undefined;
+  let subscribers: number | undefined;
+  for (const c of root.querySelectorAll(".tgme_channel_info_counter")) {
+    if (/subscriber/i.test(c.querySelector(".counter_type")?.textContent ?? "")) subscribers = parseCount(c.querySelector(".counter_value")?.textContent);
+  }
+  const descEl = root.querySelector(".tgme_channel_info_description");
+  const description = descEl ? clip(oneLine(htmlToText(descEl.innerHTML)), 200) || undefined : undefined;
+  return { title, username, subscribers, description };
 }
 
 function toOutputs(msgs: TgMessage[], channel: string, c: { output: Array<"items" | "posts">; include?: string[]; exclude?: string[]; weight: number }, now: Date) {

@@ -70,6 +70,9 @@ export interface DeskRunReport {
   costUsd: number;
 }
 
+/** Sources whose operator has not agreed to AI use (Telegram channels without consent) stay with the editors. */
+const AI_ALLOWED = sql`(${feedSources.config}->>'llmConsent') is distinct from 'false'`;
+
 function loadItems(db: DB, where: SQL | undefined, limit: number) {
   return db
     .select({
@@ -94,6 +97,7 @@ function loadItems(db: DB, where: SQL | undefined, limit: number) {
         licVerbatimOk: feedSources.licVerbatimOk,
         licReviewedAt: feedSources.licReviewedAt,
         experimentId: feedSources.experimentId,
+        aiOk: sql<boolean>`${AI_ALLOWED}`,
       },
     })
     .from(feedItems)
@@ -325,6 +329,10 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
       await closeDecision(db, q.id, "skip", `편집자가 먼저 처리한 자료 — ${q.reason}`);
       continue;
     }
+    if (items.some((r) => !r.source.aiOk)) {
+      await closeDecision(db, q.id, "skip", `AI 이용 동의가 없는 소스의 자료 — ${q.reason}`);
+      continue;
+    }
     if (q.runId !== runId && isDuplicate([q.angle, items[0].title], recent.all)) {
       await closeDecision(db, q.id, "skip", `최근 기사·초안과 겹침 — ${q.reason}`);
       continue;
@@ -505,7 +513,7 @@ export async function runDesk(d: DeskDeps): Promise<DeskRunReport> {
     const recent = await recentWork(db, now);
     const rows = await loadItems(
       db,
-      and(eq(feedItems.status, "new"), isNull(feedItems.deskDecisionId), eq(feedItems.isSample, false), gte(feedItems.fetchedAt, new Date(now.getTime() - FRESH_HOURS * HOUR))),
+      and(eq(feedItems.status, "new"), isNull(feedItems.deskDecisionId), eq(feedItems.isSample, false), gte(feedItems.fetchedAt, new Date(now.getTime() - FRESH_HOURS * HOUR)), AI_ALLOWED),
       MAX_ITEMS,
     );
     report.itemsSeen = rows.length;

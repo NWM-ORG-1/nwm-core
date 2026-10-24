@@ -48,6 +48,14 @@ export async function collectorEnv() {
   return collectorEnvOf(await setting<WorkerBeat>("worker.heartbeat"));
 }
 
+/** 소스 → 텔레그램·X 연결: whether the collector can read X yet. */
+export async function getSocialConnectInfo() {
+  await connection();
+  await requireStaff();
+  const { env } = await collectorEnv();
+  return { xKey: Boolean(env.X_BEARER_TOKEN?.trim()) };
+}
+
 export async function getIngestOverview() {
   await connection();
   await requireStaff();
