@@ -38,10 +38,18 @@ test.describe("review regressions", () => {
   test("reader toast is announced inside the viewport", async ({ page }) => {
     await page.goto("/latest");
     await page.locator("main ol a[data-row-link]").first().click();
-    await expect(page.locator("[data-reader-dock]")).toBeVisible();
-    await page.keyboard.press("k"); // first item of the list → "목록의 첫 기사입니다"
+    const dock = page.locator("[data-reader-dock]");
+    await expect(dock).toBeVisible();
+    // once hydrated, the list we came from replaces the related-articles fallback: its first item has no previous article
+    await expect(dock.getByRole("link", { name: /^이전 기사:/ })).toHaveCount(0);
+    const here = page.url();
     const toast = page.getByRole("status").filter({ hasText: "목록의 첫 기사입니다" });
-    await expect(toast).toBeVisible();
+    // the dock is server-rendered, so a key pressed before the reader's listener is attached is lost: press until heard
+    await expect(async () => {
+      expect(page.url()).toBe(here);
+      await page.keyboard.press("k"); // first item of the list → "목록의 첫 기사입니다"
+      await expect(toast).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
     const box = await toast.boundingBox();
     const vh = page.viewportSize()!.height;
     expect(box && box.y > 0 && box.y + box.height <= vh).toBe(true);
