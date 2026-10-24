@@ -36,6 +36,13 @@
       "when": 1792767537764,
       "tag": "0004_desk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792822356094,
+      "tag": "0005_telegram",
+      "breakpoints": true
     }
   ]
 }

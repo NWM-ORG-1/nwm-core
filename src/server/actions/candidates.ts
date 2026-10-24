@@ -5,13 +5,13 @@ import { after } from "next/server";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { candidateItems, candidates, stories, type CheckResult } from "@/db/schema";
+import { candidateItems, candidates, stories, type Beat, type CheckResult } from "@/db/schema";
 import { draftSchema, EMPTY_DRAFT, type Draft } from "@/lib/content/blocks";
 import { dateKST, dateTimeKST } from "@/lib/format";
 import { ASSIST_ACTION_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 import { logActivity } from "../activity";
 import { requireStaff } from "../auth";
-import { draftHash } from "../checks";
+import { confirmLegalAs, publishAs, rejectAs, saveDraftAs } from "../candidate-ops";
 import { createAutoCandidate } from "../auto/create";
 import { marketInputs, publicSentiment } from "../auto/inputs";
 import { buildDataDraft, DATA_TEMPLATES, type DataTemplateId } from "../generator/data-templates";
@@ -22,7 +22,6 @@ import {
   computeChecks,
   loadCandidateItems,
   NewsroomError,
-  publishCandidate,
   toGenItem,
 } from "../newsroom";
 import { storySlugFrom } from "../slug";
@@ -136,35 +135,9 @@ export async function saveDraft(input: {
       .parse(input);
 
     const now = new Date();
-    // A content change after sign-off voids the legal check and pulls a scheduled piece back to review.
-    const same = sql`(${candidates.draft} = ${JSON.stringify(p.draft)}::jsonb)`;
-    const updated = await db
-      .update(candidates)
-      .set({
-        draft: p.draft,
-        ...(p.beat ? { beat: p.beat } : {}),
-        ...(p.storyId !== undefined ? { storyId: p.storyId } : {}),
-        ...(p.priority !== undefined ? { priority: p.priority } : {}),
-        updatedAt: now,
-        lockVersion: sql`${candidates.lockVersion} + 1`,
-        status: sql`(case when ${candidates.status} = 'new' then 'drafting'
-                          when ${candidates.status} = 'scheduled' and not ${same} then 'review'
-                          else ${candidates.status}::text end)::candidate_status`,
-        scheduledAt: sql`case when ${candidates.status} = 'scheduled' and not ${same} then null else ${candidates.scheduledAt} end`,
-        scheduledById: sql`case when ${candidates.status} = 'scheduled' and not ${same} then null else ${candidates.scheduledById} end`,
-        checks: sql`case when ${same} then ${candidates.checks} else ${dropLegal} end`,
-      })
-      .where(and(eq(candidates.id, p.id), eq(candidates.lockVersion, p.lockVersion), ne(candidates.status, "published")))
-      .returning({ lockVersion: candidates.lockVersion, status: candidates.status });
-
-    if (!updated.length) {
-      const exists = await db.query.candidates.findFirst({ where: eq(candidates.id, p.id), columns: { id: true, status: true } });
-      if (!exists) throw new NewsroomError("후보를 찾을 수 없습니다.", "not_found");
-      if (exists.status === "published") throw new NewsroomError("이미 발행된 후보입니다.", "state");
-      throw new NewsroomError("다른 편집자가 먼저 저장했습니다. 새로고침 후 다시 시도하세요.", "conflict");
-    }
     void me;
-    return ok("저장됨", { lockVersion: updated[0].lockVersion, savedAt: now.toISOString() });
+    const saved = await saveDraftAs(db, { ...p, beat: p.beat as Beat | undefined }, now);
+    return ok("저장됨", { lockVersion: saved.lockVersion, savedAt: now.toISOString() });
   } catch (e) {
     return fail(e);
   }
@@ -208,15 +181,7 @@ export async function rejectCandidate(input: { id: string; reason: string }): Pr
   try {
     const me = await requireStaff();
     const p = z.object({ id, reason: z.string().trim().min(1).max(200) }).parse(input);
-    const c = await loadCandidate(p.id);
-    if (c.status === "published") throw new NewsroomError("발행된 후보는 반려할 수 없습니다.", "state");
-    const rejected = await db
-      .update(candidates)
-      .set({ status: "rejected", aiNote: `반려: ${p.reason}`, scheduledAt: null, scheduledById: null, updatedAt: new Date(), lockVersion: sql`${candidates.lockVersion} + 1` })
-      .where(and(eq(candidates.id, p.id), ne(candidates.status, "published")))
-      .returning({ id: candidates.id });
-    if (!rejected.length) throw new NewsroomError("발행된 후보는 반려할 수 없습니다.", "state");
-    await logActivity(db, { actorId: me.id, kind: "reject", entityType: "candidate", entityId: p.id, summary: `반려: ${p.reason}` });
+    await rejectAs(db, me, p);
     refresh();
     return ok("반려했습니다.");
   } catch (e) {
@@ -301,19 +266,7 @@ export async function confirmLegal(input: { id: string; confirmed: boolean }): P
   try {
     const me = await requireStaff();
     const p = z.object({ id, confirmed: z.boolean() }).parse(input);
-    const c = await loadCandidate(p.id);
-    const legal: CheckResult = {
-      id: "legal",
-      ok: p.confirmed,
-      blocking: true,
-      message: p.confirmed ? `${me.name} 확인 (명예훼손·저작권·개인정보)` : "편집자가 직접 확인해야 합니다",
-      ...(p.confirmed ? { draftHash: draftHash(c.draft) } : {}),
-    };
-    const prev = c.checks.filter((x) => x.id !== "legal");
-    await db.update(candidates).set({ checks: [...prev, legal] }).where(eq(candidates.id, c.id));
-    const checks = await computeChecks(db, c.id, me.name);
-    await db.update(candidates).set({ checks }).where(eq(candidates.id, c.id));
-    await logActivity(db, { actorId: me.id, kind: "check", entityType: "candidate", entityId: c.id, summary: p.confirmed ? "법률 검토 확인" : "법률 검토 해제" });
+    const checks = await confirmLegalAs(db, me, p.id, p.confirmed);
     refresh();
     return ok(undefined, { checks });
   } catch (e) {
@@ -330,14 +283,7 @@ export async function publishNow(input: { id: string; overrideReason?: string; l
     const p = z
       .object({ id, overrideReason: z.string().trim().max(300).optional(), lockVersion: z.number().int().min(0).optional() })
       .parse(input);
-    const res = await publishCandidate(db, {
-      candidateId: p.id,
-      editorId: me.id,
-      actorId: me.id,
-      overrideReason: p.overrideReason,
-      expectedLockVersion: p.lockVersion,
-    });
-    if (!res) throw new NewsroomError("발행할 수 없는 상태입니다.", "state");
+    const res = await publishAs(db, me, { id: p.id, overrideReason: p.overrideReason, lockVersion: p.lockVersion });
     invalidateFromAction(res.tags);
     refreshInBackground([T.rel]);
     after(() => cdnPurge(res.paths));

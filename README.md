@@ -68,7 +68,7 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
 | `/admin/auto` | 자동 기사: 유형별 끄기 / 검토 후 발행 / 자동 발행, 발행 시각·급변동 기준, 최근 7일 생성·발행 기록, 막힘 경고 |
 | `/admin/desk` | AI 데스크: 최근 24시간의 판단(초안·대기·보류·제외와 점수·이유), 설정(하루 초안 수·바로/나눠 쓰기·간격·기준 점수·예산·모델), 학습 현황(단계·유입 경로·주제별 반응·편집자 발행률), 편집 지침과 버전, 실행 기록 |
 | `/admin/articles` | 발행 기사: 지표, 수정·정정(버전), 정정 요청, 비공개 |
-| `/admin/stories`, `/admin/activity`, `/admin/settings` | 스토리, 감사 로그, 설정 (법정 표기, AI 초안 모델·이번 달 비용) |
+| `/admin/stories`, `/admin/activity`, `/admin/settings` | 스토리, 감사 로그, 설정 (법정 표기, 텔레그램 연결, AI 초안 모델·이번 달 비용) |
 
 ## 아키텍처 요약
 
@@ -128,6 +128,16 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
   - **저위험 표시**: 위험 20 이하, 근거 70 이상, 주 자료가 공식·1차 출처, 라이선스 검토 완료, 체크 통과(법률 확인·책임 편집자 제외)를 모두 만족하면 ‘저위험’을 붙입니다. 자동 발행은 아직 없고, 이 표시가 편집자 판단과 맞는지 본 뒤 일부를 자동으로 돌릴 수 있게 만든 장치입니다.
   - **비용**: 데스크 월 예산(기본 40달러, `desk:*` 호출 합계)과 뉴스룸 전체 한도(`DRAFT_LLM_MONTHLY_USD`)를 둘 다 지킵니다. 판단은 40건에 1센트가 안 되고(Haiku 5.5), 비용 대부분은 초안입니다(Opus 5.5 기준 1건에 대략 5–15센트). 실제 사용액은 `/admin/desk`에 나옵니다.
   - 워커에 `ANTHROPIC_API_KEY`가 없으면 쉬고, 이유를 실행 기록에 남깁니다. ‘지금 실행’은 꺼져 있어도 한 번 돕니다.
+- **텔레그램 뉴스룸 봇** (`src/server/telegram`, 웹 서비스)
+  - AI 데스크나 자동 기사가 ‘검토’에 초안을 올리면, 연결한 편집자에게 카드(제목·요약·본문·점수·발행을 막는 체크·AI 메모)를 보냅니다. 1분마다 웹 서비스의 스케줄러가 `/api/internal/telegram-tick`으로 새 초안을 찾습니다.
+  - 카드 버튼:
+    - **✅ 발행** → 한 번 더 ‘법률 검토 확인 · 발행’을 눌러야 나갑니다. 카드가 보여 준 버전에만 법률 확인이 묶이고, 그사이 초안이 바뀌었으면 발행하지 않고 새 카드를 보냅니다. 라이선스 같은 다른 필수 체크에 걸리면 답장으로 사유를 받아, 웹 편집기의 무시 발행처럼 기록합니다.
+    - **✏️ 수정** → 답장으로 `제목: …`·`요약: …`을 보내면 그대로 바꾸고, 그 밖의 지시는 Claude(어시스트 모델, 뉴스룸 월 한도 안)가 초안 전체에 반영합니다. 어느 쪽이든 법률 확인은 풀리고 새 카드가 옵니다. 표·차트가 있는 초안은 편집기에서 고칩니다.
+    - **🗑 반려** → 사유 4개 중 고르거나 답장으로 적습니다. 반려 사유는 AI 데스크 학습에 쓰입니다.
+    - 미리보기·편집기 링크(뉴스룸 로그인 필요).
+  - 웹에서 발행·반려·예약·수정하면 카드도 1분 안에 따라 바뀝니다.
+  - 연결: `/admin/settings` → 텔레그램 → ‘연결 링크 만들기’가 웹훅을 이 사이트(`/api/telegram`)로 맞추고 15분짜리 1회용 링크를 만듭니다. 링크를 연 텔레그램 계정만 그 편집자로 연결되고, 모든 작업은 그 편집자 이름으로 활동 기록에 남습니다(`via: telegram`). 텔레그램에서 `/stop`으로 끊습니다.
+  - 웹훅은 봇 토큰에서 만든 비밀값(`X-Telegram-Bot-Api-Secret-Token`)으로 확인합니다. `SITE_LOCK=1`이어도 `/api/telegram`은 열려 있습니다.
 - **데이터**: Postgres + Drizzle (`src/db/schema.ts`). 테이블은 다음과 같습니다.
   - `articles`: 블록 JSON, `ai_involvement`, 편집자
   - `article_revisions`, `article_corrections`, `correction_requests`
@@ -136,6 +146,7 @@ npm run worker                       # 수집 워커 (다른 터미널). 처음 
   - `market_quotes`, `market_metrics`, `social_posts`, `sentiment_snapshots`, `ingest_runs`
   - `article_stats_daily`(유입 경로별 조회 포함), `activity_log`, `site_settings`, `ai_usage`
   - `desk_runs`, `desk_decisions`, `desk_playbooks` (AI 데스크)
+  - `telegram_links`, `telegram_messages` (뉴스룸 봇)
 - **신뢰 장치**
   - 모든 기사에 AI 표기를 붙입니다. 화면 배지, 메타 태그, JSON-LD IPTC `digitalSourceType`.
   - AI 초안·보조 기사는 **책임 편집자가 없으면 DB가 거부**합니다 (CHECK 제약).
@@ -177,6 +188,7 @@ Postgres 하나와 서비스 두 개(**웹**, **수집 워커**)로 운영합니
    | `ANTHROPIC_API_KEY` | AI 초안용. 워커와 같은 키라면 Shared Variable로 두고 `${{shared.ANTHROPIC_API_KEY}}`로 참조합니다 |
    | `DRAFT_MODEL` · `DRAFT_ASSIST_MODEL` · `DRAFT_EFFORT` (선택) | 초안 모델(기본 `claude-opus-5-5`), 어시스트 모델(기본: 초안 모델), effort(기본: 모델 기본값) |
    | `DRAFT_LLM_MONTHLY_USD` | 초안·어시스트 합산 월 한도, 달러 (기본 50) |
+   | `NEWSROOM_TELEGRAM_BOT_TOKEN` (선택) | 뉴스룸 텔레그램 봇 토큰(@BotFather → `/newbot`). 수집용 `TELEGRAM_BOT_TOKEN`과 다른 봇을 씁니다. 넣은 뒤 `/admin/settings` → 텔레그램에서 연결합니다 |
 
 5. 빌드 순서 (Dockerfile → `scripts/docker-build.sh`): `db:migrate`(advisory lock) → (선택) `db:seed --if-empty` → `next build`.
    - DB 주소에는 비밀번호가 들어 있어서 `RUN` 줄에 직접 쓰지 않고 스크립트가 환경변수로 읽습니다. BuildKit은 `RUN` 줄을 빌드 인자 값으로 채워 로그에 찍습니다.

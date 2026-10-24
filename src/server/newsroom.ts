@@ -231,6 +231,8 @@ export async function publishCandidate(
     expectedLockVersion?: number;
     /** set by the scheduler: only publish if still scheduled and due, as the editor who scheduled it */
     scheduledDue?: Date;
+    /** where the editor acted from, when not the newsroom (recorded in the activity log) */
+    via?: string;
   },
 ): Promise<PublishResult | null> {
   return db.transaction(async (tx) => {
@@ -337,7 +339,7 @@ export async function publishCandidate(
       entityType: "article",
       entityId: article.id,
       summary: `발행: ${draft.title}`,
-      meta: { slug, candidateId: cand.id, aiInvolvement, override: opts.overrideReason ?? null },
+      meta: { slug, candidateId: cand.id, aiInvolvement, override: opts.overrideReason ?? null, ...(opts.via ? { via: opts.via } : {}) },
     });
 
     // `rel` (related rails on other article pages) is refreshed in the background by the caller

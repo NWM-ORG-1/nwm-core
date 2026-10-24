@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
 import { getMyProfile, getSettingsAdmin } from "@/data/admin";
 import { getOpsChecklist, type CheckState } from "@/data/admin-dashboard";
+import { getTelegramPanel } from "@/data/admin-telegram";
 import { Icon } from "@/components/ui/Icon";
 import { LEGAL_DEFAULTS, LEGAL_FIELDS, legalEnvName, PENDING } from "@/lib/site";
 import { cx } from "../ui";
 import { AiPanel } from "./AiPanel";
 import { LegalForm, type LegalFieldView } from "./LegalForm";
 import { ProfileForm } from "./ProfileForm";
+import { TelegramPanel } from "./TelegramPanel";
 
 export async function SettingsBody() {
-  const [settings, ops, me] = await Promise.all([getSettingsAdmin(), getOpsChecklist(), getMyProfile()]);
+  const [settings, ops, me, telegram] = await Promise.all([getSettingsAdmin(), getOpsChecklist(), getMyProfile(), getTelegramPanel()]);
   const fields: LegalFieldView[] = LEGAL_FIELDS.map((f) => ({
     key: f.key,
     label: f.label,
@@ -64,6 +66,7 @@ export async function SettingsBody() {
     <div className="grid items-start gap-4 px-6 py-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
       <div className="min-w-0 space-y-4">
         <ProfileForm me={me} />
+        <TelegramPanel data={telegram} />
         <AiPanel />
         <LegalForm fields={fields} />
       </div>

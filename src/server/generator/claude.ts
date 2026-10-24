@@ -580,6 +580,65 @@ async function assistWithClaude(o: ClaudeGeneratorOptions, input: { draft: Draft
   }
 }
 
+/* ───────────────────────── revisions (newsroom bot) ───────────────────────── */
+
+const REVISABLE = new Set<Block["type"]>(["why", "numbers", "section", "next"]);
+
+/** A draft the model can rewrite whole: made only of the blocks drafts are built from (no tables, charts or quotes). */
+export function revisable(d: Draft): boolean {
+  return d.blocks.every((b) => REVISABLE.has(b.type));
+}
+
+export function revisePrompt(input: { draft: Draft; items: GenItem[]; beat: Beat; instruction: string; now: Date }): string {
+  const { used } = promptItems(input.items);
+  const beat = BEATS[input.beat];
+  return [
+    `작성 시각: ${dateTimeKST(input.now)} (KST)`,
+    `분야: ${beat.label} — ${beat.blurb}`,
+    "",
+    "편집자가 아래 초안을 이렇게 고쳐 달라고 했습니다.",
+    `편집자 지시: ${clean(input.instruction, 1000)}`,
+    "",
+    "지시대로 고친 초안 전체를 같은 형식으로 다시 씁니다. 지시와 관계없는 부분은 그대로 두고, 자료에 없는 사실·수치는 넣지 않습니다. sourceIndexes에는 실제로 쓴 자료 번호를 적습니다.",
+    "",
+    "지금 초안:",
+    draftAsText(input.draft),
+    "",
+    ...(used.length ? [`자료 ${used.length}건 (자료 1이 주 자료입니다):`, "", ...used.map((i, n) => itemBlock(i, n + 1))] : ["원천 자료가 없습니다. 초안에 있는 사실만 씁니다."]),
+  ].join("\n");
+}
+
+/** The whole draft rewritten to an editor's instruction (from the newsroom bot). */
+export async function reviseDraft(
+  o: Pick<ClaudeGeneratorOptions, "create" | "ledger" | "effort"> & { model: string },
+  input: { draft: Draft; items: GenItem[]; beat: Beat; instruction: string; now?: Date },
+): Promise<{ draft: Draft; notes: string[]; usage: CallUsage }> {
+  if (!revisable(input.draft)) throw new ClaudeCallError("표·차트·인용이 있는 초안은 편집기에서 고쳐 주세요");
+  const now = input.now ?? new Date();
+  const { used } = promptItems(input.items);
+  const { out, usage } = await callClaude(o, {
+    purpose: "telegram:revise",
+    model: o.model,
+    user: revisePrompt({ ...input, now }),
+    schema: DraftOut,
+    maxTokens: 16000,
+    effort: o.effort,
+  });
+  let assembled: ReturnType<typeof assembleDraft>;
+  try {
+    assembled = assembleDraft(out, used);
+  } catch (e) {
+    throw new ClaudeCallError(`초안을 블록 형식으로 바꾸지 못했습니다: ${errorText(e)}`, usage);
+  }
+  // what the model does not manage stays as it was
+  const draft: Draft = {
+    ...assembled.draft,
+    ...(input.draft.sentiment !== undefined ? { sentiment: input.draft.sentiment } : {}),
+    ...(input.draft.isBreaking !== undefined ? { isBreaking: input.draft.isBreaking } : {}),
+  };
+  return { draft, notes: assembled.notes, usage };
+}
+
 /* ───────────────────────── generator ───────────────────────── */
 
 export function createClaudeGenerator(o: ClaudeGeneratorOptions): DraftGenerator {

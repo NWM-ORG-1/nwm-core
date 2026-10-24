@@ -1,7 +1,8 @@
 /**
- * In-process scheduler for scheduled publishing. Every minute it calls the
- * internal publish-due route (row locks make concurrent runners safe, so a
- * Railway cron service can replace this later without changes).
+ * In-process scheduler. Every minute it calls the internal publish-due route
+ * (row locks make concurrent runners safe, so a Railway cron service can
+ * replace this later without changes) and, when the newsroom bot is set up,
+ * the Telegram tick (draft cards and their updates).
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -14,8 +15,10 @@ export async function register() {
   if (g.__nwmScheduler) return;
 
   const port = process.env.PORT ?? "3000";
-  const url = `http://127.0.0.1:${port}/api/internal/publish-due`;
+  const base = `http://127.0.0.1:${port}/api/internal`;
+  const call = (path: string) => fetch(`${base}/${path}`, { method: "POST", headers: { authorization: `Bearer ${secret}` } }).catch(() => {});
   g.__nwmScheduler = setInterval(() => {
-    fetch(url, { method: "POST", headers: { authorization: `Bearer ${secret}` } }).catch(() => {});
+    call("publish-due");
+    if (process.env.NEWSROOM_TELEGRAM_BOT_TOKEN?.trim()) call("telegram-tick");
   }, 60_000);
 }

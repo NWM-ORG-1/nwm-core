@@ -611,6 +611,46 @@ export const deskPlaybooks = pgTable("desk_playbooks", {
   createdById: uuid("created_by_id").references(() => staff.id, { onDelete: "set null" }),
 });
 
+/* ───────────────────────────── Telegram ───────────────────────────── */
+
+/**
+ * A newsroom account linked to one Telegram user, so the bot can notify that
+ * editor and act as them. Linking goes through a one-time code from the
+ * newsroom (only its hash is stored).
+ */
+export const telegramLinks = pgTable("telegram_links", {
+  staffId: uuid("staff_id")
+    .primaryKey()
+    .references(() => staff.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").unique(),
+  codeExpiresAt: ts("code_expires_at"),
+  tgUserId: bigint("tg_user_id", { mode: "number" }).unique(),
+  chatId: bigint("chat_id", { mode: "number" }),
+  tgUsername: text("tg_username"),
+  linkedAt: ts("linked_at"),
+  /** send a card for each new draft in 검토 */
+  notify: boolean("notify").notNull().default(true),
+});
+
+/** The bot's messages about a candidate: its card, and questions waiting for a reply. */
+export const telegramMessages = pgTable(
+  "telegram_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    candidateId: uuid("candidate_id").references(() => candidates.id, { onDelete: "cascade" }),
+    chatId: bigint("chat_id", { mode: "number" }).notNull(),
+    messageId: bigint("message_id", { mode: "number" }).notNull(),
+    /** card · ask_edit · ask_reason · ask_override */
+    kind: text("kind").notNull(),
+    /** the candidate version the card shows */
+    lockVersion: integer("lock_version"),
+    /** open · done (the card shows its outcome) */
+    state: text("state").notNull().default("open"),
+    sentAt: ts("sent_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("telegram_messages_chat_msg_uq").on(t.chatId, t.messageId), index("telegram_messages_candidate_idx").on(t.candidateId)],
+);
+
 export const activityLog = pgTable(
   "activity_log",
   {
