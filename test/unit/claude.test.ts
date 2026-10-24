@@ -337,7 +337,7 @@ describe("Claude draft generator", () => {
     const system = body.system as Array<{ text: string; cache_control?: unknown }>;
     assert.ok(system[0].cache_control, "system prompt is cached");
     assert.match(system[0].text, /사실 원칙/);
-    assert.match(system[0].text, /같은 숫자와 같은 사실은 기사 전체에서 한 번만/);
+    assert.match(system[0].text, /같은 숫자와 같은 사실은 한 번만 씁니다/);
     assert.match(SYSTEM_PROMPT, /big_picture 넓게 보면: [^\n]*분류별 수치는 여기에 쓰지 않습니다/);
     assert.match(String(body.messages[0].content), /<자료 번호="1">/);
   });
