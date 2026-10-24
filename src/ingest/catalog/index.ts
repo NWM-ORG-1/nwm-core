@@ -1,5 +1,6 @@
 import type { Beat } from "@/db/schema";
 import { FIRSTHAND } from "./firsthand";
+import { WATCH } from "./watch";
 
 /**
  * Sources the newsroom starts with. `npm run sources:sync` (and the worker at
@@ -655,5 +656,5 @@ const BASE: CatalogSource[] = [
   },
 ];
 
-/** everything the newsroom starts with: the first set, then where stories first appear (firsthand.ts) */
-export const CATALOG: CatalogSource[] = [...BASE, ...FIRSTHAND];
+/** everything the newsroom starts with: the first set, where stories first appear (firsthand.ts), pages and lists without feeds (watch.ts) */
+export const CATALOG: CatalogSource[] = [...BASE, ...FIRSTHAND, ...WATCH];

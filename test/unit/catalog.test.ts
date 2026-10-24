@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CATALOG } from "@/ingest/catalog";
 import { FIRSTHAND } from "@/ingest/catalog/firsthand";
+import { WATCH } from "@/ingest/catalog/watch";
 import { validateConfig } from "@/ingest/execute";
 import { getAdapter } from "@/ingest/registry";
 
@@ -32,5 +33,15 @@ describe("source catalog", () => {
       if (e.adapter === "rss") assert.ok(days !== undefined && days <= 40, `${e.slug}: maxAgeDays`);
     }
     assert.ok(!CATALOG.some((e) => e.slug !== "fed-press" && /federalreserve\.gov\/feeds\/press_(all|monetary|enforcement)/.test(e.url ?? "") && e.slug !== "fed-press"), "the Fed's all-press feed already covers its parts");
+  });
+
+  it("watches pages politely: https, robots.txt kept, hours apart for documents, recent rows only for lists", () => {
+    for (const e of WATCH) {
+      const c = e.config as { mode?: string; respectRobots?: boolean; maxAgeDays?: number };
+      if (e.url) assert.match(e.url, /^https:\/\//, e.slug);
+      assert.notEqual(c.respectRobots, false, `${e.slug}: robots.txt`);
+      if (e.adapter === "page.watch" && c.mode !== "links") assert.ok((e.pollIntervalSec ?? 0) >= 3 * 3600, `${e.slug}: a document a few times a day`);
+      if (e.adapter === "json.list" || c.mode === "links") assert.ok(c.maxAgeDays !== undefined && c.maxAgeDays <= 7, `${e.slug}: maxAgeDays`);
+    }
   });
 });

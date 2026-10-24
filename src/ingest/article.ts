@@ -54,7 +54,9 @@ function blockText(el: HTMLElement): string {
       for (const c of n.childNodes) walk(c);
       if (BLOCK.has(tag)) out.push("\n");
     } else if (n.nodeType === 3) {
-      out.push(decodeEntities(n.rawText));
+      // a line break in the HTML source is a space (hard-wrapped pages), except inside <pre>
+      const pre = n.parentNode?.rawTagName?.toLowerCase() === "pre";
+      out.push(decodeEntities(pre ? n.rawText : n.rawText.replace(/\s*\n\s*/g, " ")));
     }
   };
   walk(el);
@@ -68,9 +70,21 @@ function blockText(el: HTMLElement): string {
     .replace(/\n{2,}/g, "\n");
 }
 
-export function extractArticleText(html: string, max = 8000): string {
+// a region chosen by selector keeps its form-ish wrappers (some sites put whole sections in <label>)
+const DROP_IN_SELECTED = "script,style,noscript,template,svg,iframe,button,select,textarea,input,img,video,audio,object";
+
+function parsePage(html: string, drop = DROP): HTMLElement {
   const root = parse(html, { comment: false, blockTextElements: { script: false, style: false, noscript: false, pre: true } });
-  for (const el of root.querySelectorAll(DROP)) el.remove();
+  for (const el of root.querySelectorAll(drop)) el.remove();
+  return root;
+}
+
+function cut(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max).replace(/\s+\S*$/, "")}…` : text;
+}
+
+export function extractArticleText(html: string, max = 8000): string {
+  const root = parsePage(html);
   for (const el of root.querySelectorAll("[class],[id],[role]")) {
     const m = marker(el);
     if (CHROME.test(m) && !/(^|[\s_-])(article|contents?|view|post|entry|body)([\s_-]|$)/i.test(m)) el.remove();
@@ -86,8 +100,19 @@ export function extractArticleText(html: string, max = 8000): string {
     el = top;
   }
   if (weight(el, memo) < MIN_TEXT) return "";
-  const text = blockText(el);
-  return text.length > max ? `${text.slice(0, max).replace(/\s+\S*$/, "")}…` : text;
+  return cut(blockText(el), max);
+}
+
+/** Text of every element matching `select`, in page order — for pages whose main text the heuristic above would miss. */
+export function selectedText(html: string, select: string, max = 8000): string {
+  const all = parsePage(html, DROP_IN_SELECTED).querySelectorAll(select);
+  const matched = new Set(all);
+  // a match inside another match is already in its text
+  const outer = all.filter((el) => {
+    for (let p = el.parentNode; p; p = p.parentNode) if (matched.has(p)) return false;
+    return true;
+  });
+  return cut(outer.map((el) => blockText(el)).filter(Boolean).join("\n"), max);
 }
 
 /**

@@ -186,6 +186,14 @@ describe("draft prompt", () => {
     assert.match(text, /분야: AI/);
   });
 
+  it("explains a changed document as before and after when an item comes from a watched page", () => {
+    const changed = item({ title: "가상 약관 변경 — 문단 1곳 수정", payload: { watch: "text", body: "[수정 1] … the Customer is [-not-]{+solely+} responsible …" } });
+    const text = draftPrompt({ items: [changed], beat: "ai", mode: "feed_draft", now: new Date("2026-10-22T05:00:00Z") });
+    assert.match(text, /공개 문서\(약관·정책·변경 기록\)가 바뀐 내용을 풀어 주는 해설 기사/);
+    assert.match(text, /\[-…-\]는 지운 말, \{\+…\+\}는 새로 넣은 말/);
+    assert.doesNotMatch(draftPrompt({ items: [item()], beat: "ai", mode: "feed_draft", now: new Date() }), /해설 기사/);
+  });
+
   it("asks for a reporting plan, not facts, when there are no sources", () => {
     const text = draftPrompt({ items: [], beat: "economy", mode: "editor_idea", idea: "환율 1,400원대가 수출기업에 주는 영향", now: new Date() });
     assert.match(text, /원천 자료가 없습니다/);

@@ -68,6 +68,29 @@ describe("exchange.markets", () => {
     assert.deepEqual(titles, ["업비트 거래지원 종료: 저트라(STRAX) KRW 마켓", "업비트 신규 거래지원: 뉴코인(NEWC) KRW 마켓", "업비트 유의 종목 지정: 지오드넷(GEOD)"]);
   });
 
+  it("reads Coinone, Digital X and GOPAX lists the same way: a market that stops trading has left", async () => {
+    const coins = Array.from({ length: 12 }, (_, i) => `C${i}`);
+    const coinone = (list: string[], halted: string[] = []) =>
+      JSON.stringify({ result: "success", error_code: "0", markets: list.map((t) => ({ quote_currency: "KRW", target_currency: t, trade_status: halted.includes(t) ? 0 : 1 })) });
+    const cSrc = source({ adapter: "exchange.markets", config: { exchange: "coinone" } });
+    const c0 = await run(cSrc, [{ match: /coinone\.co\.kr\/public\/v2\/markets\/KRW$/, body: coinone(coins) }]);
+    const c1 = await run({ ...cSrc, state: c0.state }, [{ match: /coinone/, body: coinone([...coins, "NEWC"], ["C3"]) }]);
+    assert.deepEqual(c1.result.items!.map((i) => i.title).sort(), ["코인원 거래지원 종료: C3 KRW 마켓", "코인원 신규 거래지원: NEWC KRW 마켓"]);
+    assert.equal(c1.result.items![0].url, null);
+
+    const dx = (list: Array<[string, string]>) => JSON.stringify({ success: true, data: list.map(([b, status]) => ({ symbol: `${b}_krw`, status, baseCurrency: b, quoteCurrency: "krw" })) });
+    const dSrc = source({ adapter: "exchange.markets", config: { exchange: "digitalx" } });
+    const d0 = await run(dSrc, [{ match: /api\.digitalx\.miraeasset\.com\/v2\/currencyPairs/, body: dx([...coins.map((b): [string, string] => [b.toLowerCase(), "launched"]), ["soon", "stopped"]]) }]);
+    const d1 = await run({ ...dSrc, state: d0.state }, [{ match: /digitalx/, body: dx([...coins.map((b): [string, string] => [b.toLowerCase(), "launched"]), ["soon", "launched"]]) }]);
+    assert.deepEqual(d1.result.items!.map((i) => i.title), ["디지털엑스(옛 코빗) 신규 거래지원: SOON KRW 마켓"]);
+
+    const gp = (list: string[]) => JSON.stringify(list.map((b, id) => ({ id, name: `${b}-KRW`, baseAsset: b, quoteAsset: "KRW" })));
+    const gSrc = source({ adapter: "exchange.markets", config: { exchange: "gopax" } });
+    const g0 = await run(gSrc, [{ match: /api\.gopax\.co\.kr\/trading-pairs/, body: gp(coins) }]);
+    const g1 = await run({ ...gSrc, state: g0.state }, [{ match: /gopax/, body: gp(coins.slice(1)) }]);
+    assert.deepEqual(g1.result.items!.map((i) => i.title), ["고팍스 거래지원 종료: C0 KRW 마켓"]);
+  });
+
   it("ignores a list that lost many markets at once", async () => {
     const many = Array.from({ length: 60 }, (_, i) => ({ market: `KRW-C${i}`, korean_name: `코인${i}`, market_event: { warning: false, caution: {} } }));
     const base = await run(src, [{ match: /upbit/, body: JSON.stringify(many) }]);

@@ -1,3 +1,6 @@
+import type { Http } from "./http";
+import { ConfigError } from "./types";
+
 /**
  * robots.txt (RFC 9309): groups by user-agent, Allow/Disallow with * and $,
  * longest match wins, Allow wins ties. Our product token is "NWM-FeedBot".
@@ -60,4 +63,23 @@ function toRegex(pattern: string): RegExp {
   let p = pattern.replace(/[.+?^{}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
   if (p.endsWith("\\$")) p = `${p.slice(0, -2)}$`;
   return new RegExp(`^${p}`);
+}
+
+/**
+ * Stops a page reader before it reads a path robots.txt keeps from us. The
+ * file is kept in the source's state for a day; a missing one (4xx) allows
+ * everything, a server error fails the run so it is retried later.
+ */
+export async function assertRobotsAllow(http: Http, state: Record<string, unknown>, url: string, now: Date, headers?: Record<string, string>): Promise<void> {
+  const u = new URL(url);
+  const cached = state.robots as { at: number; txt: string } | undefined;
+  let txt = cached && now.getTime() - cached.at < 86_400_000 ? cached.txt : undefined;
+  if (txt === undefined) {
+    const r = await http.request(`${u.origin}/robots.txt`, { okStatuses: [400, 401, 403, 404, 410, 451], timeoutMs: 15_000, headers });
+    txt = r.status === 200 ? r.text.slice(0, 200_000) : "";
+    state.robots = { at: now.getTime(), txt };
+  }
+  if (!parseRobots(txt).isAllowed(`${u.pathname}${u.search}`)) {
+    throw new ConfigError(`robots.txt가 이 경로를 막고 있습니다 (${u.pathname}${u.search}). 협의가 있으면 respectRobots=false와 robotsOverride를 기록하세요.`);
+  }
 }

@@ -22,8 +22,9 @@ async function probe(slug: string) {
   const started = Date.now();
   try {
     let state: Record<string, unknown> = {};
-    // stateful diffs (exchange lists) need a baseline first
-    const runs = e.adapter === "exchange.markets" ? 2 : 1;
+    // stateful diffs (exchange lists, watched pages) need a baseline first; a watched page read twice also shows its noise
+    const runs = e.adapter === "exchange.markets" || e.adapter === "page.watch" ? 2 : 1;
+    const notes: string[] = [];
     let ex;
     for (let i = 0; i < runs; i++) {
       ex = await executeAdapter(
@@ -31,9 +32,11 @@ async function probe(slug: string) {
         { limiter },
       );
       state = ex.state;
+      if (ex.result.note) notes.push(ex.result.note);
     }
     const r = ex!.result;
-    console.log(`${head} → OK ${Date.now() - started}ms, ${ex!.requests} req, http ${ex!.httpStatus ?? "-"} · ${r.note ?? ""}`);
+    console.log(`${head} → OK ${Date.now() - started}ms, ${ex!.requests} req, http ${ex!.httpStatus ?? "-"} · ${notes.join(" → ")}`);
+    if (e.adapter === "page.watch" && typeof state.text === "string") console.log(`   text: ${short(state.text.replace(/\n/g, " ¶ "), 300)}`);
     console.log(`   items ${r.items?.length ?? 0} · posts ${r.posts?.length ?? 0} · quotes ${r.quotes?.length ?? 0} · metrics ${r.metrics?.length ?? 0}`);
     for (const i of (r.items ?? []).slice(0, 3)) console.log(`   • ${short(i.title)} | ${fmt(i.publishedAt)} | ${short(i.url ?? "", 90)}${i.summary ? `\n     ${short(i.summary, 140)}` : ""}`);
     for (const p of (r.posts ?? []).slice(0, 4)) console.log(`   ◦ ${short(p.text, 80)} | ${fmt(p.postedAt)} | ${JSON.stringify(p.engagement ?? {})} | ${p.author ?? ""}`);

@@ -648,12 +648,14 @@ export const FIRSTHAND: CatalogSource[] = [
     slug: "skhynix-newsroom",
     name: "SK하이닉스 뉴스룸",
     adapter: "rss",
-    url: "https://news.skhynix.co.kr/feed/", // railway ✓
+    url: "https://news.skhynix.co.kr/feed/",
     beats: ["tech", "economy"],
     lang: "ko",
     trustTier: 1,
+    status: "paused",
     pollIntervalSec: 1800,
     config: { ...FRESH, maxItems: 10, boost: ["HBM", "실적", "투자", "양산"] },
+    note: "2026-10-24 첫 운영 수집에서 403(차단). 사전 점검 땐 열렸으므로 며칠 뒤 다시 켜 보고, 계속 막히면 홍보팀에 수집 허용을 요청합니다.",
     license: COMPANY("출처: SK하이닉스 뉴스룸"),
   },
   {

@@ -231,6 +231,15 @@ const FACT_CHECK_GUIDE = [
   "- 차트와 표는 시스템이 붙입니다. 본문에서 \"차트를 보면\"처럼 가리키지 않습니다.",
 ];
 
+/** For a change found by comparing a public document with its earlier copy (adapters/generic/page-watch.ts). */
+const DOC_CHANGE_GUIDE = [
+  "이 기사는 공개 문서(약관·정책·변경 기록)가 바뀐 내용을 풀어 주는 해설 기사입니다.",
+  "- 무엇이 어떻게 바뀌었는지 이전과 이후를 구체적으로 비교합니다. 자료의 [-…-]는 지운 말, {+…+}는 새로 넣은 말입니다.",
+  "- 문서 날짜(시행일·최종 수정일)를 밝히고, 시행일이 앞으로라면 언제부터 적용되는지 씁니다.",
+  "- 누구에게 어떤 영향이 있는지(이용자·기업 고객·개발자) 자료에 있는 범위에서 씁니다. 회사가 이유를 밝히지 않았으면 그렇다고 쓰고 의도를 단정하지 않습니다.",
+  "- 문서 문장은 핵심 문구만 짧게 인용하고 우리말로 풀어 씁니다.",
+];
+
 export function draftPrompt(input: { items: GenItem[]; beat: Beat; mode: CandidateMode; idea?: string | null; now: Date; lessons?: string[]; factCheck?: boolean }): string {
   const { used } = promptItems(input.items);
   const beat = BEATS[input.beat];
@@ -238,6 +247,7 @@ export function draftPrompt(input: { items: GenItem[]; beat: Beat; mode: Candida
   const head = [`작성 시각: ${dateTimeKST(input.now)} (KST)`, `분야: ${beat.label} — ${beat.blurb}`, `작성 방식: ${MODE_LABEL[input.mode]}`];
   if (idea) head.push(`편집자 메모: ${idea}`);
   if (input.factCheck) head.push("", ...FACT_CHECK_GUIDE);
+  else if (used.some((i) => i.payload.watch === "text")) head.push("", ...DOC_CHANGE_GUIDE);
   const lessons = (input.lessons ?? []).map((l) => clean(l, 200)).filter(Boolean);
   if (lessons.length) {
     head.push("", "편집 노트 — 편집자들이 지난 초안을 고친 방향입니다. 이번 초안에도 적용합니다(사실 원칙이 먼저입니다):", ...lessons.map((l) => `- ${l}`));

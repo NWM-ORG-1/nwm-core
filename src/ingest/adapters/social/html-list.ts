@@ -2,7 +2,7 @@ import { parse, type HTMLElement } from "node-html-parser";
 import { z } from "zod";
 import { passesKeywords } from "../../classify";
 import { HttpError } from "../../http";
-import { parseRobots } from "../../robots";
+import { assertRobotsAllow } from "../../robots";
 import { absUrl, clip, oneLine, parseCount, parseKstDate } from "../../text";
 import { ConfigError, defineAdapter, type IngestItem, type SocialPostIn } from "../../types";
 
@@ -91,19 +91,7 @@ export const htmlListAdapter = defineAdapter({
     if (!c.respectRobots && !c.robotsOverride) throw new ConfigError("robots.txt 예외에는 근거(robotsOverride: 협의 내용·일자)가 필요합니다");
     const headers = c.userAgent ? { "user-agent": c.userAgent } : undefined;
 
-    if (c.respectRobots) {
-      const u = new URL(url);
-      const cached = ctx.state.robots as { at: number; txt: string } | undefined;
-      let txt = cached && ctx.now.getTime() - cached.at < 86_400_000 ? cached.txt : undefined;
-      if (txt === undefined) {
-        const r = await ctx.http.request(`${u.origin}/robots.txt`, { okStatuses: [404, 410], timeoutMs: 15_000, headers });
-        txt = r.status === 200 ? r.text.slice(0, 200_000) : "";
-        ctx.state.robots = { at: ctx.now.getTime(), txt };
-      }
-      if (!parseRobots(txt).isAllowed(`${u.pathname}${u.search}`)) {
-        throw new ConfigError(`robots.txt가 이 경로를 막고 있습니다 (${u.pathname}${u.search}). 협의가 있으면 respectRobots=false와 robotsOverride를 기록하세요.`);
-      }
-    }
+    if (c.respectRobots) await assertRobotsAllow(ctx.http, ctx.state, url, ctx.now, headers);
 
     const html = c.cookieCheck ? await fetchWithCookieCheck(ctx.http, url, c.encoding, headers) : await ctx.http.text(url, { encoding: c.encoding, timeoutMs: 25_000, headers });
     const all = readRows(html, url, c, ctx.now);

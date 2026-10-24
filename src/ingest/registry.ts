@@ -2,9 +2,10 @@ import type { Adapter } from "./types";
 import { officialAdapters } from "./adapters/official";
 import { marketAdapters } from "./adapters/market";
 import { socialAdapters } from "./adapters/social";
+import { genericAdapters } from "./adapters/generic";
 
 /** Every collector the worker knows, by key (feed_sources.adapter). */
-const ALL: Adapter[] = [...officialAdapters, ...marketAdapters, ...socialAdapters];
+const ALL: Adapter[] = [...officialAdapters, ...marketAdapters, ...socialAdapters, ...genericAdapters];
 
 const BY_KEY = new Map<string, Adapter>();
 for (const a of ALL) {
