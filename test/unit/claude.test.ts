@@ -287,6 +287,24 @@ describe("assembled draft", () => {
     assert.deepEqual(freshNumbers([k("3건"), k("47")], "13건 접수", "470명"), [k("3건"), k("47")]);
   });
 
+  it("keeps a brief: key numbers and sections share two places, and 관전 포인트 only when there are some", () => {
+    const sections: DraftOut["sections"] = [
+      { label: "between_lines", text: "주택담보대출을 빼면 가계대출은 줄었다는 뜻이다.", bullets: [] },
+      { label: "zoom_in", text: "", bullets: ["하나", "둘"] },
+      { label: "context", text: "배경 단락이다.", bullets: [] },
+    ];
+    const kinds = (d: Draft) => d.blocks.map((b) => (b.type === "section" ? b.label : b.type));
+
+    const withNumbers = assembleDraft({ ...good(), sections, next: ["가", "나", "다"] }, [item()]);
+    assert.deepEqual(kinds(withNumbers.draft), ["why", "numbers", "between_lines", "next"], "the model's first section stays");
+    assert.match(withNumbers.notes.join(), /분량 기준\(숫자·단락 합쳐 2개\)을 넘는 단락 2개를 뺐습니다/);
+    assert.equal((withNumbers.draft.blocks.at(-1) as Extract<Draft["blocks"][number], { type: "next" }>).items.length, 2);
+
+    const noNumbers = assembleDraft({ ...good(), numbers: [], sections, next: [] }, [item()]);
+    assert.deepEqual(kinds(noNumbers.draft), ["why", "between_lines", "zoom_in"], "no 관전 포인트 block when there is nothing to watch");
+    assert.match(noNumbers.notes.join(), /단락 1개를 뺐습니다/);
+  });
+
   it("applies tighten edits to text only — numbers, quotes and unknown blocks stay as they were", () => {
     const blocks: Draft["blocks"] = [
       { type: "why", items: ["긴 문장 하나", "긴 문장 둘"] },
@@ -339,6 +357,7 @@ describe("Claude draft generator", () => {
     assert.match(system[0].text, /사실 원칙/);
     assert.match(system[0].text, /같은 숫자와 같은 사실은 한 번만 씁니다/);
     assert.match(SYSTEM_PROMPT, /big_picture 넓게 보면: [^\n]*분류별 수치는 여기에 쓰지 않습니다/);
+    assert.match(SYSTEM_PROMPT, /숫자로 보면과 본문 단락을 합쳐 많아야 2개/);
     assert.match(String(body.messages[0].content), /<자료 번호="1">/);
   });
 

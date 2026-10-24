@@ -26,7 +26,7 @@ import { DERIVED_PREFIX, loadImages, materialFromRead, photosOf, POST_READ_SYSTE
  */
 
 export const CLAUDE_GENERATOR_ID = "claude";
-export const PROMPT_VERSION = "draft-3";
+export const PROMPT_VERSION = "draft-4";
 
 /* ───────────────────────── seams ───────────────────────── */
 
@@ -140,12 +140,13 @@ export const SYSTEM_PROMPT = `당신은 뉴웹미디어(NWM)의 AI 초안 기자
 - 과장·감탄 표현("충격", "역대급", "폭발", "초비상")을 쓰지 않습니다.
 - 강조는 **굵게**만, 기사 전체에서 한두 번 씁니다. HTML, 마크다운 제목·목록 기호, 이모지는 쓰지 않습니다.
 
-# 기사 구조
+# 기사 구조 — 늘 쓰는 것은 제목·요약·왜 중요한가뿐입니다
 - 제목(title): 45자 이내. 핵심 메시지를 담은 평서형. 숫자는 수준보다 변화나 대비가 드러나게 씁니다. 예: "3분기 매출 1조 2천억 원"보다 "3분기 매출 12% 늘 때 영업이익은 3% 줄어". 대비가 핵심이 아닌 기사에 이 틀을 억지로 쓰지 않습니다. 물음표·느낌표·따옴표·말줄임표를 쓰지 않습니다.
 - 요약(dek): 1–2문장, 120자 이내. 무슨 일이 있었고 무엇이 핵심인지 한눈에 알게 합니다.
 - 왜 중요한가(why): 1–3개, 각 한 문장. 보통 1–2개면 충분하고, 앞 항목과 다른 구체적인 이야기가 있을 때만 더 씁니다. 숫자를 늘어놓지 않고, 이 일로 독자(투자자·업계 종사자)에게 무엇이 달라지는지 씁니다.
+- 그다음 블록은 골라 씁니다. 숫자로 보면과 본문 단락을 합쳐 많아야 2개입니다. 핵심 메시지를 가장 잘 보여 주는 것만 쓰고, 보탤 것이 없으면 하나도 쓰지 않습니다. 모든 칸을 채울 필요가 없습니다.
 - 숫자로 보면(numbers): 핵심 메시지를 뒷받침하는 수치 2–4개. 제목·요약에 쓴 수치는 넣지 않습니다. value는 수준("0.52%", "312만명", "1,234억 원"), delta는 자료에 있는 변화("+0.08%p", "+13만 5천명", "-4만 8천명"), label은 무엇의 수치이고 무엇과 비교한 변화인지 20자 이내("연체율·1년 전 대비")로 씁니다. 자료에 변화가 없거나 value가 그 자체로 변화율("+3.2%")이면 delta를 비웁니다. 쓸 만한 수치가 2개보다 적으면 비웁니다.
-- 본문 단락(sections): 0–2개. 앞 블록에 없는 새 정보가 자료에 있을 때만 쓰고, label로 성격을 정합니다.
+- 본문 단락(sections): 0–2개(숫자로 보면을 쓰면 0–1개). 앞 블록에 없는 새 정보가 자료에 있을 때만 쓰고, label로 성격을 정합니다.
   zoom_in 자세히 보면: 핵심 사실의 구체적 내용(대상·범위·조건·방식·일정). 분류별 수치는 가장 크게 움직인 것만 bullets 2–3개로 씁니다
   context 맥락: 이 일이 나온 배경(앞선 발표, 관련 제도, 직전 흐름)
   big_picture 넓게 보면: 이 일이 속한 더 긴 흐름(몇 년째 이어진 추세, 역대 최고·최저, 다른 시기와의 비교). 자료가 그 흐름을 직접 다룰 때만 씁니다. 분류별 수치는 여기에 쓰지 않습니다
@@ -155,7 +156,7 @@ export const SYSTEM_PROMPT = `당신은 뉴웹미디어(NWM)의 AI 초안 기자
   disagreement 다른 시각: 자료에 나온 반대 의견
   bottom_line 결론: 한 문장 정리
   단락마다 text(3문장 이내)나 bullets(2–5개) 가운데 하나를 씁니다. 쓰지 않는 쪽은 비웁니다.
-- 다음 관전 포인트(next): 1–3개. 자료에 나온 예정 일정·후속 절차·지켜볼 지표를 씁니다. 자료에 일정이 없으면 단정하지 않는 확인 포인트를 씁니다.
+- 다음 관전 포인트(next): 0–2개. 자료에 나온 예정 일정·후속 절차, 아직 정해지지 않은 이 일의 핵심 사항처럼 이 기사에만 해당하는 구체적인 것만 씁니다. "흐름이 이어질지"처럼 어느 기사에나 붙일 수 있는 말은 쓰지 않습니다. 없으면 비웁니다.
 - 태그(tags): 2–4개. 기사의 핵심 주체·주제를 한국어 명사로 씁니다.
 - 종목(tickers): 기사에 나온 종목 티커("BTC", "NVDA", "005930"). 없으면 비웁니다.`;
 
@@ -297,7 +298,7 @@ const keyNumberOut = z.object({
 export const DraftOut = z.object({
   title: z.string().describe("45자 이내 제목"),
   dek: z.string().describe("요약: 1–2문장, 120자 이내"),
-  why: z.array(z.string()).describe("왜 중요한가: 1–3개, 각 한 문장"),
+  why: z.array(z.string()).describe("왜 중요한가: 1–3개(보통 1–2개), 각 한 문장"),
   numbers: z.array(keyNumberOut).describe("숫자로 보면: 자료에 있고 제목·요약에 없는 수치 2–4개, 없으면 빈 배열"),
   sections: z
     .array(
@@ -307,8 +308,8 @@ export const DraftOut = z.object({
         bullets: z.array(z.string()).describe("2–5개. text를 쓰면 빈 배열"),
       }),
     )
-    .describe("본문 단락 0–2개. 앞 블록에 없는 새 정보가 자료에 없으면 빈 배열"),
-  next: z.array(z.string()).describe("다음 관전 포인트 1–3개"),
+    .describe("본문 단락 0–2개(숫자로 보면과 합쳐 2개 이내). 앞 블록에 없는 새 정보가 자료에 없으면 빈 배열"),
+  next: z.array(z.string()).describe("다음 관전 포인트 0–2개. 이 기사에만 해당하는 구체적인 일정·후속 절차가 없으면 빈 배열"),
   tags: z.array(z.string()).describe("2–4개"),
   tickers: z.array(z.string()).describe("종목 티커, 없으면 빈 배열"),
   sourceIndexes: z.array(z.number()).describe("실제로 쓴 자료 번호"),
@@ -395,6 +396,9 @@ function sourceRefs(used: GenItem[], indexes: number[]): SourceRef[] {
   return out.slice(0, 10);
 }
 
+/** Blocks a draft may have between 왜 중요한가 and 다음 관전 포인트: the key numbers and the sections together. */
+export const MIDDLE_BLOCKS = 2;
+
 /**
  * Model output → a draft in the block schema: why → numbers → sections → next,
  * trimmed to the schema limits, sources taken from the items it used.
@@ -410,14 +414,23 @@ export function assembleDraft(out: DraftOut, used: GenItem[]): { draft: Draft; n
   if (nums.length >= 2) blocks.push({ type: "numbers", items: nums });
   else if (nums.length === 1) notes.push("수치가 1건뿐이라 숫자 블록을 뺐습니다");
 
-  for (const s of out.sections.slice(0, 3)) {
+  // a brief, not a form to fill: the key numbers and the sections share two places
+  let room = MIDDLE_BLOCKS - (nums.length >= 2 ? 1 : 0);
+  let over = 0;
+  for (const s of out.sections) {
     const text = line(s.text, 600);
     const bullets = lines(s.bullets, 300, 5);
     if (!text && !bullets.length) continue;
+    if (room <= 0) {
+      over++;
+      continue;
+    }
+    room--;
     blocks.push({ type: "section", label: s.label, ...(text ? { text } : {}), ...(bullets.length ? { bullets } : {}) });
   }
+  if (over) notes.push(`분량 기준(숫자·단락 합쳐 ${MIDDLE_BLOCKS}개)을 넘는 단락 ${over}개를 뺐습니다`);
 
-  const next = lines(out.next, 300, 3);
+  const next = lines(out.next, 300, 2);
   if (next.length) blocks.push({ type: "next", items: next });
 
   const tags = [...new Set(lines(out.tags, 30, 8).map((t) => t.replace(/^#/, "")))].filter(Boolean).slice(0, 4);
