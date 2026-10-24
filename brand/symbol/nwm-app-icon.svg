@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t">
+<title id="t">뉴웹미디어 NWM</title>
+<rect x="0" y="0" width="64" height="64" rx="14" fill="#05060a"/>
+<path fill="#9ec5ff" d="M9.5 9.5H26V14.5H14.5V26H9.5ZM54.5 54.5H38V49.5H49.5V38H54.5Z"/>
+<path fill="#f2f5fb" d="M22 43V21h6.2l7.6 13.2V21H42v22h-6.1l-7.7-13.3V43z"/>
+</svg>
