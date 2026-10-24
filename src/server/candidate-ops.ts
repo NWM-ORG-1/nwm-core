@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { candidates, type Beat, type CandidateStatus, type CheckResult } from "@/db/schema";
+import { candidates, draftFeedback, type Beat, type CandidateStatus, type CheckResult } from "@/db/schema";
 import type { Draft } from "@/lib/content/blocks";
 import { logActivity } from "./activity";
 import type { StaffRow } from "./auth";
 import { draftHash } from "./checks";
+import { CLAUDE_GENERATOR_ID } from "./generator/claude";
 import { computeChecks, NewsroomError, publishCandidate, type PublishResult } from "./newsroom";
 
 /**
@@ -29,6 +30,19 @@ export async function saveDraftAs(
   now = new Date(),
 ): Promise<{ lockVersion: number; status: CandidateStatus }> {
   const same = sql`(${candidates.draft} = ${JSON.stringify(p.draft)}::jsonb)`;
+  // the model's own draft, kept once right before the first human change: what the desk's 편집 노트 learn from
+  await db.execute(sql`
+    insert into draft_feedback (candidate_id, beat, sources, ai_draft)
+    select c.id, c.beat,
+           coalesce((select array_agg(distinct s.name) from candidate_items ci
+                     join feed_items fi on fi.id = ci.feed_item_id
+                     join feed_sources s on s.id = fi.source_id
+                     where ci.candidate_id = c.id), '{}'),
+           c.draft
+    from candidates c
+    where c.id = ${p.id} and c.lock_version = ${p.lockVersion} and c.status <> 'published'
+      and c.generator->>'id' = ${CLAUDE_GENERATOR_ID} and c.draft <> ${JSON.stringify(p.draft)}::jsonb
+    on conflict (candidate_id) do nothing`);
   const updated = await db
     .update(candidates)
     .set({
@@ -114,6 +128,7 @@ export async function rejectAs(db: DB, me: StaffRow, p: { id: string; reason: st
     const exists = await db.query.candidates.findFirst({ where: eq(candidates.id, p.id), columns: { id: true } });
     throw new NewsroomError(exists ? "발행된 후보는 반려할 수 없습니다." : "후보를 찾을 수 없습니다.", exists ? "state" : "not_found");
   }
+  await db.update(draftFeedback).set({ outcome: "rejected", closedAt: new Date() }).where(and(eq(draftFeedback.candidateId, p.id), isNull(draftFeedback.outcome)));
   await logActivity(db, {
     actorId: me.id,
     kind: "reject",
@@ -122,4 +137,12 @@ export async function rejectAs(db: DB, me: StaffRow, p: { id: string; reason: st
     summary: `반려: ${p.reason}`,
     ...(p.via ? { meta: { via: p.via } } : {}),
   });
+}
+
+/** An editor's instruction to the AI ("더 짧게") — the clearest kind of feedback for the 편집 노트. */
+export async function noteInstruction(db: DB, candidateId: string, text: string): Promise<void> {
+  await db
+    .update(draftFeedback)
+    .set({ instructions: sql`array_append(${draftFeedback.instructions}, ${text.trim().slice(0, 300)})` })
+    .where(and(eq(draftFeedback.candidateId, candidateId), isNull(draftFeedback.outcome)));
 }

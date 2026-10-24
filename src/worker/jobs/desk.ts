@@ -1,9 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
+import { bodyFetcher } from "@/ingest/fetch-body";
 import { candidates, deskDecisions, deskRuns } from "@/db/schema";
 import { hasAnthropicKey } from "@/lib/ai/models";
 import { loadDeskModel, refreshDeskModel } from "@/server/desk/learn";
+import { countPendingCases, LESSON_MIN_CASES, reviewLessons } from "@/server/desk/lessons";
 import { activePlaybook, REFLECT_EVERY_DAYS, REFLECT_MIN, REFLECT_MODEL, reflect, savePlaybookVersion } from "@/server/desk/playbook";
 import { deskSpendUsd, runDesk } from "@/server/desk/run";
 import { loadDeskSettings, loadDeskState, patchDeskState } from "@/server/desk/settings";
@@ -56,6 +58,7 @@ export const deskTriageJob: Job = {
       trigger: after(state.runRequestedAt, last) ? "manual" : "schedule",
       globalCapUsd: cfg.budgetUsd,
       draftEffort: cfg.effort,
+      fetchBody: bodyFetcher(),
     });
     return {
       seen: r.itemsSeen,
@@ -150,3 +153,47 @@ async function review(now: Date): Promise<JobResult> {
     meta: { costUsd: out.usage.costUsd },
   };
 }
+
+/**
+ * desk.lessons — brings the 편집 노트 up to date from the drafts editors
+ * changed: when a few are waiting, at least every few days when any is, or
+ * when the newsroom asks. A weekly pass with nothing waiting only retires
+ * faded notes (no model call).
+ */
+const LESSONS_GAP_H = 6;
+const LESSONS_STALE_DAYS = 3;
+const LESSONS_SWEEP_DAYS = 7;
+
+export const deskLessonsJob: Job = {
+  name: "desk.lessons",
+  everySec: 3600,
+  offsetSec: 40 * 60,
+  async due(now) {
+    const state = await loadDeskState(db);
+    if (after(state.lessonsRequestedAt, state.lessonsAt ? new Date(state.lessonsAt) : undefined)) return true;
+    const since = state.lessonsAt ? now.getTime() - Date.parse(state.lessonsAt) : Number.POSITIVE_INFINITY;
+    if (since < LESSONS_GAP_H * 3_600_000) return false;
+    if (since >= LESSONS_SWEEP_DAYS * 86_400_000) return true;
+    const waiting = await countPendingCases(db);
+    return waiting >= LESSON_MIN_CASES || (waiting > 0 && since >= LESSONS_STALE_DAYS * 86_400_000);
+  },
+  async run(now) {
+    try {
+      const create = claude();
+      const waiting = await countPendingCases(db);
+      // with edits to read the review needs the model; a sweep of faded notes does not
+      if (waiting && !create) return { note: "ANTHROPIC_API_KEY가 없어 건너뜀" };
+      if (waiting && (await aiMonthSpendUsd(db)) >= draftGeneratorConfig().budgetUsd) return { note: "이번 달 AI 한도가 차서 편집 노트 정리를 건너뜀" };
+      const r = await reviewLessons({ create, ledger: dbLedger(db) }, db, now);
+      return {
+        seen: r.cases,
+        inserted: r.added,
+        updated: r.updated,
+        note: `편집 노트: 사례 ${r.cases}건 · 새 노트 ${r.added} · 고침 ${r.updated} · 뺌 ${r.retired}${r.notes ? ` — ${r.notes}` : ""}`.slice(0, 500),
+        meta: { costUsd: r.usage?.costUsd ?? 0 },
+      };
+    } finally {
+      await patchDeskState(db, { lessonsAt: now.toISOString() });
+    }
+  },
+};

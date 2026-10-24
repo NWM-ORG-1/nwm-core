@@ -43,6 +43,13 @@
       "when": 1792822356094,
       "tag": "0005_telegram",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792827288987,
+      "tag": "0006_lessons",
+      "breakpoints": true
     }
   ]
 }

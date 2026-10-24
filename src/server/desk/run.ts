@@ -11,6 +11,9 @@ import { ClaudeCallError, writeDraft, type CreateCall, type UsageLedger } from "
 import { aiMonthSpendUsd } from "../generator/ledger";
 import type { GenItem } from "../generator/types";
 import { loadDeskModel } from "./learn";
+import type { BodyFetcher } from "@/ingest/fetch-body";
+import { enrichItems, materialChars, MIN_MATERIAL } from "./enrich";
+import { lessonsFor, loadLessons } from "./lessons";
 import { activePlaybook } from "./playbook";
 import { draftSlots, exploreAllowance, explorePoints, finalScores, kstDayStart, lowRisk, pickStories, priorPoints, type Contender } from "./score";
 import { loadDeskSettings, type DeskSettings } from "./settings";
@@ -52,6 +55,8 @@ export interface DeskDeps {
   draftEffort?: Effort;
   /** tests: settings instead of the stored ones */
   settings?: DeskSettings;
+  /** reads the article behind a title-only feed item; omitted = no fetching */
+  fetchBody?: BodyFetcher;
 }
 
 export interface DeskRunReport {
@@ -82,6 +87,7 @@ function loadItems(db: DB, where: SQL | undefined, limit: number) {
       source: {
         name: feedSources.name,
         kind: feedSources.kind,
+        adapter: feedSources.adapter,
         trustTier: feedSources.trustTier,
         signalOnly: feedSources.signalOnly,
         licCommercialOk: feedSources.licCommercialOk,
@@ -342,10 +348,17 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
   }).map((k) => waiting.find((w) => w.id === k)!);
   // the same event can come in two batches: draft it once
   const chosen = picked.filter((w, i) => !picked.slice(0, i).some((p) => isDuplicate([w.angle, w.items[0].title], [p.angle, p.items[0].title])));
+  const lessons = chosen.length ? await loadLessons(db) : [];
 
   await mapLimit(chosen, 2, async (w) => {
     if (budgetLeft() <= 0) {
       if (!notes.includes("예산이 차서 초안을 미뤘습니다")) notes.push("예산이 차서 초안을 미뤘습니다");
+      return;
+    }
+    if (d.fetchBody) await enrichItems(db, w.items, d.fetchBody, now);
+    if (materialChars(w.items) < MIN_MATERIAL) {
+      // a headline is not enough to write from; the editor still has the item in the inbox
+      await closeDecision(db, w.id, "hold", `원문 본문을 가져오지 못해 제목만으로는 쓰지 않았습니다 — ${w.reason}`);
       return;
     }
     const beat: Beat = w.beat ?? w.items[0].beatGuess ?? "tech";
@@ -354,7 +367,13 @@ async function draftFromQueue(d: DeskDeps, runId: string, settings: DeskSettings
     try {
       gen = await writeDraft(
         { create: d.create, ledger: d.ledger, model: settings.draftModel, effort: d.draftEffort, budgetUsd: Number.POSITIVE_INFINITY, now: () => now },
-        { items: w.items.map(toGen), beat, mode: "feed_draft", idea: w.angle ? `기사 각도 — ${w.angle}` : null },
+        {
+          items: w.items.map(toGen),
+          beat,
+          mode: "feed_draft",
+          idea: w.angle ? `기사 각도 — ${w.angle}` : null,
+          lessons: lessonsFor(lessons, { beat, sources: [...new Set(w.items.map((i) => i.source.name))] }, now),
+        },
         "desk:draft",
       );
     } catch (e) {

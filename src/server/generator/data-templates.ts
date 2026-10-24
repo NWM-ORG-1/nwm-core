@@ -458,8 +458,7 @@ export function buildExchangeEvent(e: ExchangeEventInput): Draft | null {
     .slice(0, 3)
     .map((c) => named(c.name, c.coin))
     .join(", ")} ${coins.length > 3 ? "등 " : ""}${coins.length}개`;
-  const seen = `${hhmmKST(e.at)} 확인`;
-
+  // no clock time in the copy: the article carries its own, and "11:41 확인" only reads as late next to the exchange's notice
   let title: string;
   let dek: string;
   let why: string;
@@ -467,29 +466,25 @@ export function buildExchangeEvent(e: ExchangeEventInput): Draft | null {
     case "listed":
       title = single ? `${ex}, ${named(first.name, first.coin)} ${marketsOf(first.quotes)} 거래지원` : `${ex}, ${coins.length}종 거래지원… ${shortList}${coins.length > 3 ? " 등" : ""}`;
       dek = single
-        ? `${ex} 마켓 목록에 ${named(first.name, first.coin)} ${marketsOf(first.quotes)}이 새로 나타났다(${seen}).`
-        : `${ex} 마켓 목록에 ${longList} 자산의 마켓이 새로 나타났다(${seen}).`;
+        ? `${josa(ex, "이/가")} ${marketsOf(first.quotes)}에 ${named(first.name, first.coin, "을/를")} 추가했다.`
+        : `${josa(ex, "이/가")} ${longList} 자산을 마켓에 추가했다.`;
       why = `해당 자산을 ${ex}에서 거래할 수 있게 됐다는 뜻이다.`;
       break;
     case "delisted":
       title = single ? `${ex}, ${named(first.name, first.coin)} ${marketsOf(first.quotes)} 거래지원 종료` : `${ex}, ${coins.length}종 거래지원 종료… ${shortList}${coins.length > 3 ? " 등" : ""}`;
       dek = single
-        ? `${ex} 마켓 목록에서 ${named(first.name, first.coin)} ${marketsOf(first.quotes)}이 빠졌다(${seen}).`
-        : `${ex} 마켓 목록에서 ${longList} 자산의 마켓이 빠졌다(${seen}).`;
+        ? `${ex} ${marketsOf(first.quotes)}에서 ${named(first.name, first.coin)}의 거래지원이 종료됐다.`
+        : `${ex} 마켓에서 ${longList} 자산의 거래지원이 종료됐다.`;
       why = "해당 마켓에서는 더 이상 거래할 수 없다. 남은 자산의 출금 가능 기간은 거래소 공지를 따른다.";
       break;
     case "warning":
       title = single ? `${ex}, ${named(first.name, first.coin)} 유의 종목 지정` : `${ex}, ${coins.length}종 유의 종목 지정… ${shortList}${coins.length > 3 ? " 등" : ""}`;
-      dek = single
-        ? `${josa(ex, "이/가")} ${named(first.name, first.coin, "을/를")} 유의 종목으로 지정했다(${seen}).`
-        : `${josa(ex, "이/가")} ${longList} 종목을 유의 종목으로 지정했다(${seen}).`;
+      dek = single ? `${josa(ex, "이/가")} ${named(first.name, first.coin, "을/를")} 유의 종목으로 지정했다.` : `${josa(ex, "이/가")} ${longList} 종목을 유의 종목으로 지정했다.`;
       why = "유의 종목은 거래소가 투자자 보호를 위해 지정하며, 지정 사유가 해소되지 않으면 거래지원이 종료될 수 있다.";
       break;
     case "warning_lifted":
       title = single ? `${ex}, ${named(first.name, first.coin)} 유의 종목 지정 해제` : `${ex}, ${coins.length}종 유의 종목 지정 해제… ${shortList}${coins.length > 3 ? " 등" : ""}`;
-      dek = single
-        ? `${josa(ex, "이/가")} ${named(first.name, first.coin)}의 유의 종목 지정을 해제했다(${seen}).`
-        : `${josa(ex, "이/가")} ${longList} 종목의 유의 종목 지정을 해제했다(${seen}).`;
+      dek = single ? `${josa(ex, "이/가")} ${named(first.name, first.coin)}의 유의 종목 지정을 해제했다.` : `${josa(ex, "이/가")} ${longList} 종목의 유의 종목 지정을 해제했다.`;
       why = "거래소가 유의 종목 지정 사유가 해소됐다고 판단했다는 뜻이다.";
       break;
   }
@@ -498,7 +493,7 @@ export function buildExchangeEvent(e: ExchangeEventInput): Draft | null {
     { type: "why", items: [why] },
     {
       type: "table",
-      caption: `${ex} ${DATA_TEMPLATES[EXCHANGE_TEMPLATE[e.change]].label} (${seen})`,
+      caption: `${ex} ${DATA_TEMPLATES[EXCHANGE_TEMPLATE[e.change]].label}`,
       columns: ["자산", "티커", "마켓"],
       rows: coins.slice(0, 20).map((c) => [c.name, c.coin, marketsOf(c.quotes)]),
     },
@@ -515,7 +510,13 @@ export function buildExchangeEvent(e: ExchangeEventInput): Draft | null {
   }
   blocks.push({
     type: "next",
-    items: [e.change === "warning_lifted" ? `해제 사유는 ${ex} 공지사항에서 확인할 수 있다.` : `거래·입출금 일정과 사유는 ${ex} 공지사항에서 확인할 수 있다.`],
+    items: [
+      e.change === "warning_lifted"
+        ? `해제 사유는 ${ex} 공지사항에서 확인할 수 있다.`
+        : e.change === "listed"
+          ? `거래 개시 시각과 입출금 일정은 ${ex} 공지사항에서 확인할 수 있다.`
+          : `거래·입출금 일정과 사유는 ${ex} 공지사항에서 확인할 수 있다.`,
+    ],
   });
 
   return {

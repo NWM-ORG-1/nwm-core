@@ -155,7 +155,8 @@ describe("exchange events", () => {
     });
     assertPublishable(d);
     assert.equal(d.title, "업비트, 솔라나(SOL) 원화 마켓 거래지원");
-    assert.equal(d.dek, "업비트 마켓 목록에 솔라나(SOL) 원화 마켓이 새로 나타났다(10:02 확인).");
+    assert.equal(d.dek, "업비트가 원화 마켓에 솔라나(SOL)를 추가했다.");
+    assert.doesNotMatch(text(d), /\d{1,2}:\d{2}/, "no detection clock time in the copy");
     assert.match(text(d), /빗썸에서는 솔라나\(SOL\) 원화 마켓이 거래 중이다/);
     assert.deepEqual(d.tickers, ["SOL"]);
   });
@@ -169,6 +170,7 @@ describe("exchange events", () => {
     });
     assertPublishable(d);
     assert.equal(d.title, "업비트, 뉴코인(NEWC) 원화·BTC·USDT 마켓 거래지원");
+    assert.equal(d.dek, "업비트가 원화·BTC·USDT 마켓에 뉴코인(NEWC)을 추가했다.");
   });
 
   it("several warnings at once, with particles that fit", () => {
@@ -184,17 +186,18 @@ describe("exchange events", () => {
     });
     assertPublishable(d);
     assert.equal(d.title, "빗썸, 2종 유의 종목 지정… 에이코인·비코인");
-    assert.equal(d.dek, "빗썸이 에이코인(AAA), 비코인(BBB) 2개 종목을 유의 종목으로 지정했다(10:02 확인).");
+    assert.equal(d.dek, "빗썸이 에이코인(AAA), 비코인(BBB) 2개 종목을 유의 종목으로 지정했다.");
     assert.match(text(d), /업비트 원화 마켓에는 비코인\(BBB\)이 없다/);
   });
 
   it("single designation and lifting", () => {
     const one = (change: "warning" | "warning_lifted" | "delisted") =>
       buildExchangeEvent({ exchange: "upbit", change, markets: [{ market: "KRW-SOL", coin: "SOL", quote: "KRW", name: "솔라나" }], at });
-    assert.equal(one("warning")!.dek, "업비트가 솔라나(SOL)를 유의 종목으로 지정했다(10:02 확인).");
-    assert.equal(one("warning_lifted")!.dek, "업비트가 솔라나(SOL)의 유의 종목 지정을 해제했다(10:02 확인).");
+    assert.equal(one("warning")!.dek, "업비트가 솔라나(SOL)를 유의 종목으로 지정했다.");
+    assert.equal(one("warning_lifted")!.dek, "업비트가 솔라나(SOL)의 유의 종목 지정을 해제했다.");
     assert.equal(one("warning_lifted")!.isBreaking, false);
     assert.equal(one("delisted")!.title, "업비트, 솔라나(SOL) 원화 마켓 거래지원 종료");
+    assert.equal(one("delisted")!.dek, "업비트 원화 마켓에서 솔라나(SOL)의 거래지원이 종료됐다.");
   });
 });
 

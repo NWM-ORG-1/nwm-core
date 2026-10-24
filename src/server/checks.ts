@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Draft } from "@/lib/content/blocks";
 import { plainText } from "@/lib/content/blocks";
 import type { CandidateMode, CheckId, CheckResult } from "@/db/schema";
+import { payloadBody } from "@/ingest/body";
 import { AI_DISCLOSURE } from "@/lib/labels";
 
 /**
@@ -142,7 +143,7 @@ export function runChecks(input: {
     }
     if (!i.lic.reviewed) problems.push(`라이선스 미검토: ${i.sourceName}`);
     else if (i.lic.commercialOk === false) problems.push(`상업적 이용 불가: ${i.sourceName}`);
-    if (i.lic.verbatimOk === false && copiesRun(text, i.summary, 30)) problems.push(`원문 30자 이상 연속 인용: ${i.sourceName}`);
+    if (i.lic.verbatimOk === false && copiesRun(text, `${i.summary} ${payloadBody(i.payload)}`, 30)) problems.push(`원문 30자 이상 연속 인용: ${i.sourceName}`);
   }
   push("license", problems.length === 0, problems.length ? [...new Set(problems)].join(" · ") : "모든 소스 이용 범위 내");
 

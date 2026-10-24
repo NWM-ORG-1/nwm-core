@@ -1,11 +1,11 @@
 "use server";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { candidateItems, candidates, stories, type Beat, type CheckResult } from "@/db/schema";
+import { candidateItems, candidates, draftFeedback, stories, type Beat, type CheckResult } from "@/db/schema";
 import { draftSchema, EMPTY_DRAFT, type Draft } from "@/lib/content/blocks";
 import { dateKST, dateTimeKST } from "@/lib/format";
 import { ASSIST_ACTION_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
@@ -215,6 +215,8 @@ export async function regenerateDraft(input: { id: string }): Promise<ActionStat
       })
       .where(and(eq(candidates.id, c.id), ne(candidates.status, "published")))
       .returning({ lockVersion: candidates.lockVersion });
+    // a fresh model draft: the next human save keeps it as the new "before"
+    await db.delete(draftFeedback).where(and(eq(draftFeedback.candidateId, c.id), isNull(draftFeedback.outcome)));
     const how = gen.meta.model ? `${gen.meta.model}${gen.meta.usage ? `, $${gen.meta.usage.costUsd.toFixed(3)}` : ""}` : gen.meta.id;
     await logActivity(db, { actorId: me.id, kind: "draft", entityType: "candidate", entityId: c.id, summary: `초안 생성 (${how})`, meta: { generator: gen.meta.id, model: gen.meta.model, usage: gen.meta.usage } });
     refresh();

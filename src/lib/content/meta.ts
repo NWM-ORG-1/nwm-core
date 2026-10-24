@@ -17,10 +17,10 @@ export const SECTION_LABELS = [
 export type SectionLabel = (typeof SECTION_LABELS)[number];
 
 export const SECTION_LABEL_KO: Record<SectionLabel, string> = {
-  big_picture: "큰 그림",
+  big_picture: "넓게 보면",
   between_lines: "행간",
-  yes_but: "다만",
-  zoom_in: "줌인",
+  yes_but: "짚어볼 점",
+  zoom_in: "자세히 보면",
   context: "맥락",
   view_from: "현장의 시각",
   disagreement: "다른 시각",

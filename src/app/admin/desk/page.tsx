@@ -3,12 +3,13 @@ import { Suspense } from "react";
 import { getDeskAdmin } from "@/data/admin-desk";
 import { ActionButton } from "@/components/admin/client";
 import { DeskSettingsForm } from "@/components/admin/desk/DeskSettingsForm";
+import { LessonsPanel } from "@/components/admin/desk/LessonsPanel";
 import { PlaybookEditor } from "@/components/admin/desk/PlaybookEditor";
 import { ArticleRank, DecisionList, Effects, Notice, PHASE, RunsTable, TrafficBar } from "@/components/admin/desk/views";
 import { Ago } from "@/components/admin/feeds/time";
 import { Badge, Card, PageHeader, Stat } from "@/components/admin/ui";
 import { modelInfo } from "@/lib/ai/models";
-import { requestDeskRun, requestReflection } from "@/server/actions/desk";
+import { requestDeskRun, requestLessonReview, requestReflection } from "@/server/actions/desk";
 import { QUEUE_HOURS } from "@/server/desk/run";
 import { DESK_CADENCES, DESK_DRAFT_MODELS, DESK_TRIAGE_MODELS } from "@/server/desk/settings";
 
@@ -202,6 +203,28 @@ async function Body() {
               </details>
             )}
           </div>
+        </Card>
+
+        <Card
+          title={`편집 노트 ${d.lessons.notes.length}/${d.lessons.max}`}
+          actions={
+            <div className="flex items-center gap-2">
+              <span className="hud text-fg-4">
+                고친 초안 {d.lessons.waiting}건 대기
+                {d.lessons.reviewedAt && (
+                  <>
+                    {" "}
+                    · 마지막 정리 <Ago iso={d.lessons.reviewedAt} />
+                  </>
+                )}
+              </span>
+              <ActionButton action={requestLessonReview} args={{}} title="쌓인 수정 사례를 읽고 노트를 정리합니다">
+                {d.lessons.requested ? "정리 대기 중…" : "AI 정리 요청"}
+              </ActionButton>
+            </div>
+          }
+        >
+          <LessonsPanel data={d.lessons} />
         </Card>
 
         <Card title="최근 실행" pad={false}>

@@ -81,13 +81,23 @@ export interface DeskState {
   reflectRequestedAt?: string;
   /** the last guide review, whether or not it changed the guide (ISO) */
   reflectedAt?: string;
+  /** the newsroom asked for the 편집 노트 to be brought up to date now (ISO) */
+  lessonsRequestedAt?: string;
+  /** the last 편집 노트 review (ISO) */
+  lessonsAt?: string;
 }
 
 export async function loadDeskState(db: Pick<DB, "query">): Promise<DeskState> {
   const row = await db.query.siteSettings.findFirst({ where: eq(siteSettings.key, DESK_STATE_KEY) });
   const v = (row?.value ?? {}) as Record<string, unknown>;
   const iso = (x: unknown) => (typeof x === "string" && !Number.isNaN(Date.parse(x)) ? x : undefined);
-  return { runRequestedAt: iso(v.runRequestedAt), reflectRequestedAt: iso(v.reflectRequestedAt), reflectedAt: iso(v.reflectedAt) };
+  return {
+    runRequestedAt: iso(v.runRequestedAt),
+    reflectRequestedAt: iso(v.reflectRequestedAt),
+    reflectedAt: iso(v.reflectedAt),
+    lessonsRequestedAt: iso(v.lessonsRequestedAt),
+    lessonsAt: iso(v.lessonsAt),
+  };
 }
 
 /** Merged in the database, so the newsroom's requests and the worker's notes never overwrite each other. */

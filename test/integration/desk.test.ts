@@ -8,6 +8,7 @@ import { kstDayStart } from "@/server/desk/score";
 import { DESK_DEFAULTS, type DeskSettings } from "@/server/desk/settings";
 import type { TriageOut } from "@/server/desk/triage";
 import { NO_LEDGER, type CreateCall, type DraftOut } from "@/server/generator/claude";
+import type { BodyFetcher } from "@/ingest/fetch-body";
 
 /** Needs Postgres (DATABASE_URL); CI provides one. Creates and removes its own rows; Claude is faked. */
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -24,6 +25,8 @@ const T = {
   d: "한빛반도체, 지난주 실적 발표",
   e: "한빛반도체, 2나노 공정 양산 일정 공개",
   f: "누리AI랩, 서울 연구소 개소",
+  g: "가상부, 반도체 인허가 기간 절반으로 단축",
+  h: "가상부, 수출기업 대상 설명회 개최",
 };
 
 const draftOut: DraftOut = {
@@ -77,19 +80,20 @@ function fakeClaude(triage: (n: (title: string) => number) => Story[]) {
 
 const settings = (over: Partial<DeskSettings> = {}): DeskSettings => ({ ...DESK_DEFAULTS, dailyDrafts: 5, minScore: 60, exploreShare: 0, ...over });
 const runs: string[] = [];
-async function run(create: CreateCall | null, s: DeskSettings): Promise<DeskRunReport> {
-  const r = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "manual", globalCapUsd: 1000, settings: s });
+async function run(create: CreateCall | null, s: DeskSettings, fetchBody?: BodyFetcher): Promise<DeskRunReport> {
+  const r = await runDesk({ db, create, ledger: NO_LEDGER, now: NOW, trigger: "manual", globalCapUsd: 1000, settings: s, fetchBody });
   if (r.runId) runs.push(r.runId);
   return r;
 }
 
 let official = "";
+let ministry = "";
 let reputable = "";
 let signal = "";
 let playbookExisted = false;
 const itemIds = new Map<string, string>();
 
-async function addItem(key: keyof typeof T, o: { source: string; summary: string; publishedHoursAgo?: number; beat?: "ai" | "economy" | "tech" }) {
+async function addItem(key: keyof typeof T, o: { source: string; summary: string; publishedHoursAgo?: number; beat?: "ai" | "economy" | "tech"; url?: string }) {
   const [row] = await db
     .insert(feedItems)
     .values({
@@ -98,7 +102,7 @@ async function addItem(key: keyof typeof T, o: { source: string; summary: string
       contentHash: `${PREFIX}${key}`,
       title: T[key],
       summary: o.summary,
-      url: `https://example.com/${key}`,
+      url: o.url ?? `https://example.com/${key}`,
       beatGuess: o.beat ?? "ai",
       score: 60,
       publishedAt: new Date(NOW.getTime() - (o.publishedHoursAgo ?? 2) * HOUR),
@@ -147,6 +151,10 @@ describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
     [{ id: signal }] = await db
       .insert(feedSources)
       .values({ slug: `${PREFIX}signal`, name: "다른 언론", kind: "rss", trustTier: 2, signalOnly: true, ...lic })
+      .returning({ id: feedSources.id });
+    [{ id: ministry }] = await db
+      .insert(feedSources)
+      .values({ slug: `${PREFIX}ministry`, name: "가상부 보도자료", kind: "rss", adapter: "rss", trustTier: 1, ...lic })
       .returning({ id: feedSources.id });
   });
   after(async () => {
@@ -262,6 +270,34 @@ describe("AI desk", { skip: !enabled && "DATABASE_URL not set" }, () => {
     const d = await db.query.deskDecisions.findFirst({ where: arrayOverlaps(deskDecisions.itemIds, [id]) });
     assert.equal(d?.decision, "skip");
     assert.match(d?.reason ?? "", /^편집자가 먼저 처리한 자료/);
+  });
+
+  it("reads the article behind a title-only press release, and holds the one it cannot read", async () => {
+    const g = await addItem("g", { source: ministry, summary: "", beat: "economy", url: "https://www.example.go.kr/view/g" });
+    const h = await addItem("h", { source: ministry, summary: "자세한 내용은 첨부파일을 참고하시기 바랍니다.", beat: "economy", url: "https://www.example.go.kr/view/h" });
+    const BODY = "가상부는 23일 반도체 공장 인허가 기간을 평균 18개월에서 9개월로 줄이는 방안을 발표했다. 용수·전력 인허가를 한 창구에서 함께 심사한다.";
+    const asked: string[] = [];
+    const fetchBody: BodyFetcher = async (url) => (asked.push(url), url.endsWith("/g") ? { text: BODY, from: "page", url } : null);
+    const judged = fakeClaude((n) => [
+      story({ items: [n(T.g)], beat: "economy", topic: "반도체 규제", angle: "인허가 기간 단축", news: 85, interest: 80, evidence: 85, risk: 10, reason: "정부 공식 발표" }),
+      story({ items: [n(T.h)], beat: "economy", topic: "수출 설명회", angle: "수출기업 설명회", news: 75, interest: 70, evidence: 80, risk: 10, reason: "정부 공식 발표" }),
+    ]);
+    const r = await run(judged.create, settings(), fetchBody);
+
+    assert.deepEqual(asked.sort(), ["https://www.example.go.kr/view/g", "https://www.example.go.kr/view/h"]);
+    assert.equal(r.drafted.length, 1);
+    const drafts = judged.calls.filter((c) => c.kind === "draft");
+    assert.equal(drafts.length, 1, "no model call for the story with only a headline");
+    assert.ok(drafts[0].user.includes(`본문: ${BODY}`), "the writer reads the fetched article");
+
+    const [rowG, rowH] = await Promise.all([g, h].map((id) => db.query.feedItems.findFirst({ where: eq(feedItems.id, id) })));
+    assert.equal(rowG?.payload.body, BODY);
+    assert.equal(rowG?.payload.bodyFrom, "page");
+    assert.ok(rowH?.payload.bodyTried, "a failed read is remembered");
+    assert.equal(rowH?.status, "new", "the editor still has it in the inbox");
+    const held = await db.query.deskDecisions.findFirst({ where: arrayOverlaps(deskDecisions.itemIds, [h]) });
+    assert.equal(held?.decision, "hold");
+    assert.match(held?.reason ?? "", /^원문 본문을 가져오지 못해 제목만으로는 쓰지 않았습니다/);
   });
 
   it("rests without a key or a budget, and says why", async () => {

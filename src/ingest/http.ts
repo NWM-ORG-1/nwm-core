@@ -99,6 +99,8 @@ export interface RequestOptions {
   okStatuses?: number[];
   /** "manual" to inspect redirects yourself (cookie checks) */
   redirect?: "follow" | "manual";
+  /** keep the body as bytes (PDFs) instead of decoding it to text */
+  binary?: boolean;
 }
 
 export interface HttpResponse {
@@ -107,6 +109,8 @@ export interface HttpResponse {
   headers: Headers;
   text: string;
   notModified: boolean;
+  /** with `binary` */
+  bytes?: Uint8Array;
 }
 
 type Validators = Record<string, { etag?: string; lastModified?: string; at: number }>;
@@ -163,7 +167,7 @@ export class Http {
     }
 
     const bytes = await readCapped(res, opts.maxBytes ?? 5_000_000);
-    const text = decode(bytes, res.headers.get("content-type"), opts.encoding);
+    const text = opts.binary && res.ok ? "" : decode(bytes, res.headers.get("content-type"), opts.encoding);
 
     if (!res.ok && !opts.okStatuses?.includes(res.status)) {
       const retryAfter = parseRetryAfter(res.headers.get("retry-after"));
@@ -176,7 +180,7 @@ export class Http {
       const lastModified = res.headers.get("last-modified") ?? undefined;
       if (etag || lastModified) this.remember(url, { etag, lastModified, at: Date.now() });
     }
-    return { status: res.status, url: res.url || url, headers: res.headers, text, notModified: false };
+    return { status: res.status, url: res.url || url, headers: res.headers, text, notModified: false, ...(opts.binary ? { bytes } : {}) };
   }
 
   async text(url: string, opts?: RequestOptions): Promise<string> {

@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { articles, candidates, deskDecisions, deskPlaybooks, deskRuns, siteSettings, staff, type Beat, type CandidateStatus, type DeskDecision, type DeskScores } from "@/db/schema";
 import { requireStaff } from "@/server/auth";
 import { loadDeskModel } from "@/server/desk/learn";
+import { countPendingCases, HALF_LIFE_DAYS, LESSON_CHARS, LESSON_MIN_CASES, lessonWeight, loadLessons, MAX_LESSONS, scopeLabel } from "@/server/desk/lessons";
 import { activePlaybook } from "@/server/desk/playbook";
 import { deskSpendUsd, draftedToday, QUEUE_HOURS } from "@/server/desk/run";
 import { pacedAllowance } from "@/server/desk/score";
@@ -61,6 +62,17 @@ export interface DeskAdmin {
   worker: { alive: boolean; hasKey: boolean; lastBeat: string | null };
   pending: { run: boolean; reflect: boolean };
   reflectedAt: string | null;
+  lessons: {
+    notes: Array<{ id: string; text: string; scope: string; scopeLabel: string; hits: number; lastSeenAt: string; pinned: boolean; origin: string; fading: boolean }>;
+    /** edited drafts the next review will read */
+    waiting: number;
+    reviewedAt: string | null;
+    requested: boolean;
+    max: number;
+    halfLifeDays: number;
+    minCases: number;
+    chars: number;
+  };
 }
 
 export async function getDeskAdmin(): Promise<DeskAdmin> {
@@ -121,6 +133,7 @@ export async function getDeskAdmin(): Promise<DeskAdmin> {
     db.query.siteSettings.findFirst({ where: eq(siteSettings.key, "worker.heartbeat") }),
   ]);
 
+  const [lessons, waitingCases] = await Promise.all([loadLessons(db), countPendingCases(db)]);
   const lastRun = runs[0]?.startedAt;
   const beatAt = (beat?.value as { at?: string } | undefined)?.at ?? null;
   const out30 = { review: 0, published: 0, rejected: 0, other: 0 };
@@ -174,5 +187,28 @@ export async function getDeskAdmin(): Promise<DeskAdmin> {
       reflect: Boolean(state.reflectRequestedAt && (!state.reflectedAt || Date.parse(state.reflectRequestedAt) > Date.parse(state.reflectedAt))),
     },
     reflectedAt: state.reflectedAt ?? null,
+    lessons: {
+      notes: lessons
+        .sort((a, b) => lessonWeight(b, now) - lessonWeight(a, now))
+        .map((l) => ({
+          id: l.id,
+          text: l.text,
+          scope: l.scope,
+          scopeLabel: scopeLabel(l.scope),
+          hits: l.hits,
+          lastSeenAt: l.lastSeenAt.toISOString(),
+          pinned: l.pinned,
+          origin: l.origin,
+          // under one sighting's worth of weight: the next review may retire it
+          fading: !l.pinned && lessonWeight(l, now) < 1,
+        })),
+      waiting: waitingCases,
+      reviewedAt: state.lessonsAt ?? null,
+      requested: Boolean(state.lessonsRequestedAt && (!state.lessonsAt || Date.parse(state.lessonsRequestedAt) > Date.parse(state.lessonsAt))),
+      max: MAX_LESSONS,
+      halfLifeDays: HALF_LIFE_DAYS,
+      minCases: LESSON_MIN_CASES,
+      chars: LESSON_CHARS,
+    },
   };
 }

@@ -651,6 +651,54 @@ export const telegramMessages = pgTable(
   (t) => [uniqueIndex("telegram_messages_chat_msg_uq").on(t.chatId, t.messageId), index("telegram_messages_candidate_idx").on(t.candidateId)],
 );
 
+/**
+ * What an editor changed in an AI draft: the model's version, captured right
+ * before the first human save, and the version that was published. The desk
+ * distils these into a handful of 편집 노트 (desk_lessons) for later drafts;
+ * rows are deleted 90 days after they are read.
+ */
+export const draftFeedback = pgTable(
+  "draft_feedback",
+  {
+    candidateId: uuid("candidate_id")
+      .primaryKey()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    beat: beatEnum("beat").notNull(),
+    /** names of the feed sources the draft was written from */
+    sources: text("sources").array().notNull().default(sql`'{}'::text[]`),
+    aiDraft: jsonb("ai_draft").$type<Draft>().notNull(),
+    finalDraft: jsonb("final_draft").$type<Draft>(),
+    /** what the editor asked the AI to change (Telegram ✏️ replies) */
+    instructions: text("instructions").array().notNull().default(sql`'{}'::text[]`),
+    /** published · rejected; null while the draft is still in the newsroom */
+    outcome: text("outcome"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    closedAt: ts("closed_at"),
+    distilledAt: ts("distilled_at"),
+  },
+  (t) => [index("draft_feedback_pending_idx").on(t.outcome, t.distilledAt)],
+);
+
+/**
+ * 편집 노트: short writing rules learnt from editors' changes, read by the
+ * draft writer. At most a dozen; a note that later edits stop confirming
+ * fades out unless an editor pinned it.
+ */
+export const deskLessons = pgTable("desk_lessons", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  text: text("text").notNull(),
+  /** all · beat:<beat> · source:<source name> */
+  scope: text("scope").notNull().default("all"),
+  /** edits that showed it */
+  hits: integer("hits").notNull().default(1),
+  lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+  pinned: boolean("pinned").notNull().default(false),
+  /** ai · editor */
+  origin: text("origin").notNull().default("ai"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
 export const activityLog = pgTable(
   "activity_log",
   {

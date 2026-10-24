@@ -147,6 +147,8 @@ jobs:
       - name: Worker image builds, runs and stops cleanly
         run: |
           docker build -f Dockerfile.worker -t nwm-worker:ci .
+          # the desk reads PDF-only press releases with pdftotext
+          docker run --rm --entrypoint pdftotext nwm-worker:ci -v
           docker run -d --name nwm-worker --network=host \
             -e DATABASE_URL=postgres://nwm:nwm@localhost:5432/nwm \
             -e WORKER_SYNC_CATALOG=0 \

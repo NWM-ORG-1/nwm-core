@@ -1,11 +1,12 @@
 import "server-only";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import {
   articleRevisions,
   articles,
   candidateItems,
   candidates,
+  draftFeedback,
   feedItems,
   feedSources,
   staff,
@@ -330,6 +331,8 @@ export async function publishCandidate(
       .update(candidates)
       .set({ status: "published", articleId: article.id, checks, updatedAt: now, lockVersion: sql`${candidates.lockVersion} + 1` })
       .where(eq(candidates.id, cand.id));
+    // an AI draft the editor changed: its before and after feed the desk's 편집 노트
+    await tx.update(draftFeedback).set({ finalDraft: draft, outcome: "published", closedAt: now }).where(and(eq(draftFeedback.candidateId, cand.id), isNull(draftFeedback.outcome)));
 
     await refreshStoryStats(tx, cand.storyId);
 

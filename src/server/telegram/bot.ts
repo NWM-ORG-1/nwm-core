@@ -6,7 +6,7 @@ import { draftSchema, type Draft } from "@/lib/content/blocks";
 import { clockKST, dateTimeKST } from "@/lib/format";
 import { logActivity } from "../activity";
 import type { StaffRow } from "../auth";
-import { confirmLegalAs, publishAs, rejectAs, saveDraftAs } from "../candidate-ops";
+import { confirmLegalAs, noteInstruction, publishAs, rejectAs, saveDraftAs } from "../candidate-ops";
 import { blockingFailures } from "../checks";
 import { revisable } from "../generator/claude";
 import type { GenItem } from "../generator/types";
@@ -271,6 +271,7 @@ async function onEdit(d: BotDeps, me: StaffRow, chatId: number, c: Card, text: s
       const items = await loadCandidateItems(d.db, c.candidateId);
       const draft = await revise({ draft: c.draft, items: items.map(toGenItem), beat: c.beat, instruction: text });
       await saveEdit(d, me, chatId, c, draft, `텔레그램에서 AI 수정: ${text.slice(0, 120)}`);
+      await noteInstruction(d.db, c.candidateId, text);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await send(d, chatId, `고치지 못했습니다: ${escapeHtml(msg.slice(0, 300))}`).catch(() => {});

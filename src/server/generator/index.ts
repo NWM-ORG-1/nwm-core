@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db/client";
+import { lessonsFor, loadLessons } from "../desk/lessons";
 import { createClaudeGenerator } from "./claude";
 import { draftGeneratorConfig } from "./config";
 import { dbLedger } from "./ledger";
@@ -19,6 +20,7 @@ function claudeFromEnv(): DraftGenerator {
     effort: cfg.effort,
     budgetUsd: cfg.budgetUsd,
     ledger: dbLedger(db),
+    lessons: async (ctx) => lessonsFor(await loadLessons(db), ctx, new Date()),
   });
 }
 
