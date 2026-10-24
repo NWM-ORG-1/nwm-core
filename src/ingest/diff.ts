@@ -223,7 +223,8 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 const MONTH = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?`;
 const DATE = String.raw`(\d{4}\s*[-./]\s*\d{1,2}\s*[-./]\s*\d{1,2}|\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日|${MONTH}\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}\s+${MONTH},?\s+\d{4})`;
 const LABEL = String.raw`(?:effective(?:\s+(?:date|as\s+of|on|from))?|last\s+(?:updated|modified|revised|changed)|(?:date\s+)?(?:updated|revised|modified)(?:\s+on)?|version\s+date|시행일자?|개정일자?|최종\s*(?:수정|개정|변경)일?|공고일자?|적용일자?|변경일자?|施行日|最終更新日?|改定日|更新日)`;
-const LABEL_FIRST = new RegExp(String.raw`${LABEL}[^\d\n]{0,24}?${DATE}`, "gi");
+// the label may sit on the line above its date ("Effective" ⏎ "Jun 17, 2025")
+const LABEL_FIRST = new RegExp(String.raw`${LABEL}[^\d\n]{0,24}?(?:\n[^\d\n]{0,12}?)?${DATE}`, "gi");
 const DATE_FIRST = new RegExp(String.raw`${DATE}\.?\s*(?:부터\s*)?(?:시행|적용)`, "gi");
 
 /** "October 20, 2026" · "2026. 10. 20" · "2026년 10월 20일" → "2026-10-20" */

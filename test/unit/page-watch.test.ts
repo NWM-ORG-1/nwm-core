@@ -70,6 +70,7 @@ describe("paragraph and word diffs", () => {
     assert.equal(docDate("제1조(목적)\n시행일: 2026년 11월 1일")?.iso, "2026-11-01");
     assert.equal(docDate("부칙\n이 약관은 2025. 3. 1.부터 시행합니다.\n이 약관은 2026. 11. 1.부터 시행합니다.")?.iso, "2026-11-01");
     assert.equal(docDate("最終更新日：2026年10月1日")?.iso, "2026-10-01");
+    assert.deepEqual(docDate("M Miscellaneous\n\nEffective\nJun 17, 2025\n\nType"), { label: "Effective Jun 17, 2025", iso: "2025-06-17" }, "label on the line above");
     assert.equal(docDate("no dates here"), null);
     assert.equal(isoDay("2026-13-40"), null);
     assert.equal(isoDay("1 Sept 2026"), "2026-09-01");
