@@ -152,11 +152,12 @@ async function send(d: Ctx, chatId: number, text: string, extra: Record<string, 
   return m.message_id;
 }
 
-const keyboardFor = (d: Ctx, c: Card, mode: Parameters<typeof cardKeyboard>[1]) =>
-  cardKeyboard({ candidateId: c.candidateId, lockVersion: c.lockVersion, site: d.site, slug: c.slug }, mode);
+// Mini App buttons work only in a private chat (a user's chat id is positive, a group's negative) and over https
+const keyboardFor = (d: Ctx, chatId: number, c: Card, mode: Parameters<typeof cardKeyboard>[1]) =>
+  cardKeyboard({ candidateId: c.candidateId, lockVersion: c.lockVersion, site: d.site, slug: c.slug, miniApp: chatId > 0 && d.site.startsWith("https://") }, mode);
 
 export async function sendCard(d: Ctx, chatId: number, c: Card): Promise<void> {
-  const messageId = await send(d, chatId, cardText(c), { reply_markup: { inline_keyboard: keyboardFor(d, c, "open") } });
+  const messageId = await send(d, chatId, cardText(c), { reply_markup: { inline_keyboard: keyboardFor(d, chatId, c, "open") } });
   await d.db.insert(telegramMessages).values({ candidateId: c.candidateId, chatId, messageId, kind: "card", lockVersion: c.lockVersion });
 }
 
@@ -184,7 +185,7 @@ export async function settleCards(d: Ctx, c: Card, outcome: CardOutcome): Promis
     .from(telegramMessages)
     .where(and(eq(telegramMessages.candidateId, c.candidateId), ne(telegramMessages.state, "done")));
   for (const m of open) {
-    if (m.kind === "card") await editCard(d, m.chatId, m.messageId, cardText(c, outcome), keyboardFor(d, c, "done"));
+    if (m.kind === "card") await editCard(d, m.chatId, m.messageId, cardText(c, outcome), keyboardFor(d, m.chatId, c, "done"));
     await d.db.update(telegramMessages).set({ state: "done" }).where(eq(telegramMessages.id, m.id));
   }
 }
@@ -192,7 +193,7 @@ export async function settleCards(d: Ctx, c: Card, outcome: CardOutcome): Promis
 /** A card brought up to date in place: the current draft and open buttons, or a scheduled note while it waits. */
 export async function refreshCard(d: Ctx, m: { id: string; chatId: number; messageId: number }, c: Card): Promise<void> {
   const scheduled = c.status === "scheduled" && c.scheduledAt;
-  await editCard(d, m.chatId, m.messageId, cardText(c, scheduled ? outcomeOf(c)! : undefined), scheduled ? [] : keyboardFor(d, c, "open"));
+  await editCard(d, m.chatId, m.messageId, cardText(c, scheduled ? outcomeOf(c)! : undefined), scheduled ? [] : keyboardFor(d, m.chatId, c, "open"));
   await d.db
     .update(telegramMessages)
     .set({ lockVersion: c.lockVersion, state: scheduled ? "waiting" : "open" })
@@ -431,11 +432,11 @@ async function onCallback(d: BotDeps, q: TgCallback): Promise<Later | null> {
         return null;
       }
       case "back":
-        await setKeyboard(d, chatId, messageId, keyboardFor(d, c, "open"));
+        await setKeyboard(d, chatId, messageId, keyboardFor(d, chatId, c, "open"));
         await answer();
         return null;
       case "rej":
-        await setKeyboard(d, chatId, messageId, keyboardFor(d, c, "reject"));
+        await setKeyboard(d, chatId, messageId, keyboardFor(d, chatId, c, "reject"));
         await answer("반려 사유를 고르세요.");
         return null;
       case "edit":
@@ -459,7 +460,7 @@ async function onCallback(d: BotDeps, q: TgCallback): Promise<Later | null> {
         }
         const r = await publishFromCard(d, me, chatId, c, a.lockVersion);
         if (r.failing) {
-          await setKeyboard(d, chatId, messageId, keyboardFor(d, c, "open"));
+          await setKeyboard(d, chatId, messageId, keyboardFor(d, chatId, c, "open"));
           await ask(d, chatId, c, "ask_override", askOverride(r.failing));
           await answer("필수 체크에 걸려 사유가 필요합니다.");
           return null;

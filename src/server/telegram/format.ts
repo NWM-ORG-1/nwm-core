@@ -128,7 +128,12 @@ export function cardText(c: CardInput, outcome?: CardOutcome): string {
 
 export type KeyboardMode = "open" | "confirm" | "reject" | "done";
 
-export function cardKeyboard(c: { candidateId: string; lockVersion: number; site: string; slug?: string | null }, mode: KeyboardMode): InlineKeyboard {
+/**
+ * `miniApp`: in a private chat the preview opens inside Telegram and signs in
+ * with the linked Telegram account (/tg/preview); elsewhere it is the
+ * newsroom page behind the password.
+ */
+export function cardKeyboard(c: { candidateId: string; lockVersion: number; site: string; slug?: string | null; miniApp?: boolean }, mode: KeyboardMode): InlineKeyboard {
   const id = c.candidateId;
   switch (mode) {
     case "open":
@@ -139,7 +144,7 @@ export function cardKeyboard(c: { candidateId: string; lockVersion: number; site
           { text: "🗑 반려", callback_data: `rej:${id}` },
         ],
         [
-          { text: "👁 미리보기", url: `${c.site}/admin/candidates/${id}/preview` },
+          c.miniApp ? { text: "👁 미리보기", web_app: { url: `${c.site}/tg/preview/${id}` } } : { text: "👁 미리보기", url: `${c.site}/admin/candidates/${id}/preview` },
           { text: "🖊 편집기", url: `${c.site}/admin/candidates/${id}` },
         ],
       ];

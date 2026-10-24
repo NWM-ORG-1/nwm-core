@@ -29,8 +29,11 @@ export async function proxy(req: NextRequest) {
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const siteLocked = process.env.SITE_LOCK === "1";
   if (!isAdmin && !siteLocked) return NextResponse.next();
-  // Health checks, internal bearer routes and the bot webhook (Telegram's secret header) have their own auth.
-  if (path === "/api/health" || path.startsWith("/api/internal/") || path === "/api/telegram") return NextResponse.next();
+  // Health checks, internal bearer routes, the bot webhook (Telegram's secret header) and the bot's
+  // Mini App preview (Telegram's signed launch data) have their own auth.
+  if (path === "/api/health" || path.startsWith("/api/internal/") || path === "/api/telegram" || path === "/api/telegram/webapp" || path.startsWith("/tg/")) {
+    return NextResponse.next();
+  }
 
   if (!adminConfigured()) return deny(503, "ADMIN_USERS is not configured.");
 

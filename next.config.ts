@@ -63,6 +63,15 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
+      {
+        // the newsroom bot's Mini App: Telegram Web shows it in a frame; its URLs carry a preview ticket
+        source: "/tg/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self' https://web.telegram.org; base-uri 'self'; object-src 'none'" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
     ];
   },
 };

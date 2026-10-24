@@ -1,7 +1,9 @@
 import type { BlockType } from "@/lib/content/blocks";
+import { BEATS } from "@/lib/beats";
 import { BLOCK_TITLE_KO } from "@/lib/content/meta";
 import type { AiInvolvement, Beat, CandidateMode, CandidateStatus, CheckId } from "@/db/schema";
 import type { getBoard, getCandidateBundle } from "@/data/admin";
+import type { PreviewArticle } from "./ArticlePreview";
 
 /**
  * Client-safe helpers for the candidate board and editor. Type-only imports from
@@ -74,6 +76,32 @@ export function bylineOf(v: AiInvolvement, beatLabel: string, editorName: string
   if (v === "auto") return "NWM 데이터 데스크";
   if (v === "ai_draft_edited") return `NWM ${beatLabel} 데스크`;
   return `글 · ${editorName}`;
+}
+
+/** A saved draft as the public article page will show it; until it is published, the viewer would sign it. */
+export function previewArticle(
+  c: Pick<CandidateBundle["candidate"], "mode" | "beat" | "draft" | "generator" | "article">,
+  storyTitle: string | null,
+  viewerName: string,
+): PreviewArticle {
+  const ai = aiInvolvementOf(c.mode, c.generator?.id ?? null);
+  const editorName = c.article?.editorName ?? viewerName;
+  const d = c.draft;
+  return {
+    title: d.title,
+    dek: d.dek,
+    blocks: d.blocks,
+    sentiment: d.sentiment,
+    beat: c.beat,
+    isBreaking: d.isBreaking,
+    storyTitle,
+    ai,
+    editorName,
+    byline: c.article?.byline ?? bylineOf(ai, BEATS[c.beat].label, editorName),
+    tickers: d.tickers,
+    tags: d.tags,
+    sources: d.sources,
+  };
 }
 
 /* ───────────────────────────── time (KST) ───────────────────────────── */

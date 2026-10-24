@@ -3,11 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getCandidateBundle } from "@/data/admin";
-import { BEATS } from "@/lib/beats";
 import { clockKST, dateKST } from "@/lib/format";
 import { Badge, StatusBadge } from "@/components/admin/ui";
 import { ArticlePreview } from "@/components/admin/candidates/ArticlePreview";
-import { aiInvolvementOf, bylineOf } from "@/components/admin/candidates/shared";
+import { previewArticle } from "@/components/admin/candidates/shared";
 import { Icon } from "@/components/ui/Icon";
 
 export const metadata: Metadata = { title: "기사 미리보기" };
@@ -25,9 +24,7 @@ async function Preview({ params }: Pick<PageProps<"/admin/candidates/[id]/previe
   const bundle = await getCandidateBundle(id);
   if (!bundle) notFound();
   const c = bundle.candidate;
-  const ai = aiInvolvementOf(c.mode, c.generator?.id ?? null);
   const story = c.storyId ? bundle.stories.find((s) => s.id === c.storyId) : null;
-  const d = c.draft;
 
   return (
     <>
@@ -51,23 +48,7 @@ async function Preview({ params }: Pick<PageProps<"/admin/candidates/[id]/previe
       </div>
       {/* same column as the public article page: max-w 40rem, px-4 on phones */}
       <div className="mx-auto max-w-[40rem] px-4 pb-24 pt-8 lg:pt-12">
-        <ArticlePreview
-          a={{
-            title: d.title,
-            dek: d.dek,
-            blocks: d.blocks,
-            sentiment: d.sentiment,
-            beat: c.beat,
-            isBreaking: d.isBreaking,
-            storyTitle: story?.title ?? null,
-            ai,
-            editorName: c.article?.editorName ?? bundle.me.name,
-            byline: c.article?.byline ?? bylineOf(ai, BEATS[c.beat].label, c.article?.editorName ?? bundle.me.name),
-            tickers: d.tickers,
-            tags: d.tags,
-            sources: d.sources,
-          }}
-        />
+        <ArticlePreview a={previewArticle(c, story?.title ?? null, bundle.me.name)} />
       </div>
     </>
   );

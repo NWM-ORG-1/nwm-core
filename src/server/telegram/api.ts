@@ -11,6 +11,8 @@ export interface InlineButton {
   text: string;
   callback_data?: string;
   url?: string;
+  /** opens the page inside Telegram as a Mini App (private chats only) */
+  web_app?: { url: string };
 }
 export type InlineKeyboard = InlineButton[][];
 

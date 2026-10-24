@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import { closeDb, db } from "@/db/client";
@@ -13,6 +13,8 @@ import { handleUpdate, type BotDeps, type TgUpdate } from "@/server/telegram/bot
 import { NOT_LINKED } from "@/server/telegram/format";
 import { createLinkCode } from "@/server/telegram/links";
 import { telegramTick } from "@/server/telegram/notify";
+import { makeTicket, readTicket, TICKET_SEC, verifyInitData } from "@/server/telegram/webapp";
+import { POST as miniAppSignIn } from "@/app/api/telegram/webapp/route";
 
 /**
  * The newsroom bot end to end, against Postgres (DATABASE_URL; CI provides one)
@@ -132,6 +134,46 @@ async function cleanup() {
   if (people.length) await db.delete(staff).where(inArray(staff.id, people.map((p) => p.id)));
 }
 
+/** Launch data the way Telegram signs it for a Mini App (core.telegram.org/bots/webapps) */
+function initDataFor(userId: number, token: string, authDate = Math.floor(Date.now() / 1000), user: Record<string, unknown> = { id: userId, first_name: "편집", username: `u${userId}` }): string {
+  const fields: Record<string, string> = { auth_date: String(authDate), query_id: "AAHitest", signature: "itest-signature", user: JSON.stringify(user) };
+  const check = Object.keys(fields)
+    .sort()
+    .map((k) => `${k}=${fields[k]}`)
+    .join("\n");
+  const secret = createHmac("sha256", "WebAppData").update(token).digest();
+  return new URLSearchParams({ ...fields, hash: createHmac("sha256", secret).update(check).digest("hex") }).toString();
+}
+
+describe("Telegram Mini App sign-in", () => {
+  const TOKEN = "123456:itest-bot-token";
+  const now = new Date("2026-10-24T12:00:00Z");
+  const at = Math.floor(now.getTime() / 1000);
+  const CANDIDATE = "11111111-1111-4111-8111-111111111111";
+  const EDITOR = "22222222-2222-4222-8222-222222222222";
+
+  it("accepts launch data signed with the bot's token, fresh, for a real user", () => {
+    assert.deepEqual(verifyInitData(initDataFor(USER, TOKEN, at), TOKEN, now), { id: USER, username: `u${USER}` });
+    assert.equal(verifyInitData(initDataFor(USER, "654321:another-bot", at), TOKEN, now), null, "another bot's data");
+    const tampered = initDataFor(USER, TOKEN, at).replace(encodeURIComponent(`"id":${USER}`), encodeURIComponent(`"id":${STRANGER}`));
+    assert.equal(verifyInitData(tampered, TOKEN, now), null, "a changed user");
+    assert.equal(verifyInitData(initDataFor(USER, TOKEN, at - 7 * 3600), TOKEN, now), null, "too old");
+    assert.ok(verifyInitData(initDataFor(USER, TOKEN, at - 5 * 3600), TOKEN, now), "a Mini App left open for a while");
+    assert.equal(verifyInitData(initDataFor(USER, TOKEN, at + 3600), TOKEN, now), null, "from the future");
+    assert.equal(verifyInitData(initDataFor(USER, TOKEN, at, { first_name: "no id" }), TOKEN, now), null, "no user id");
+    assert.equal(verifyInitData("auth_date=1&user=%7B%7D", TOKEN, now), null, "no hash");
+  });
+
+  it("issues a ticket for one draft, for an hour, that only this server can make", () => {
+    const ticket = makeTicket({ tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE }, TOKEN, now);
+    assert.deepEqual(readTicket(ticket, TOKEN, now), { tgUserId: USER, staffId: EDITOR, candidateId: CANDIDATE, exp: at + TICKET_SEC });
+    assert.equal(readTicket(ticket, TOKEN, new Date(now.getTime() + TICKET_SEC * 1000)), null, "expired");
+    assert.equal(readTicket(ticket, "654321:another-bot", now), null, "signed by another key");
+    assert.equal(readTicket(ticket.replace(CANDIDATE, "33333333-3333-4333-8333-333333333333"), TOKEN, now), null, "another draft");
+    assert.equal(readTicket(null, TOKEN, now), null);
+  });
+});
+
 describe("newsroom bot", { skip: !enabled && "DATABASE_URL not set" }, () => {
   before(async () => {
     await cleanup();
@@ -165,6 +207,37 @@ describe("newsroom bot", { skip: !enabled && "DATABASE_URL not set" }, () => {
     assert.match(fake.calls.at(-1)!.params.text!, /맞지 않거나 만료/);
     const stranger = await db.query.telegramLinks.findFirst({ where: eq(telegramLinks.tgUserId, STRANGER) });
     assert.equal(stranger, undefined);
+  });
+
+  it("opens the preview inside Telegram, signed in as the linked editor and nobody else", async () => {
+    const id = await makeCandidate(licensed, "미");
+    await telegramTick({ db, tg: fake.tg, site: SITE, pauseMs: 0 });
+    const keys = (cardOf(id)!.params.reply_markup!.inline_keyboard ?? []).flat() as Array<{ text: string; web_app?: { url: string } }>;
+    assert.deepEqual(keys.find((b) => b.text === "👁 미리보기")?.web_app, { url: `${SITE}/tg/preview/${id}` });
+
+    const TOKEN = "123456:itest-bot-token";
+    const saved = process.env.NEWSROOM_TELEGRAM_BOT_TOKEN;
+    process.env.NEWSROOM_TELEGRAM_BOT_TOKEN = TOKEN;
+    const ask = (initData: string, site = "same-origin") =>
+      miniAppSignIn(
+        new Request(`${SITE}/api/telegram/webapp`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "sec-fetch-site": site },
+          body: JSON.stringify({ initData, candidateId: id }),
+        }) as Parameters<typeof miniAppSignIn>[0],
+      );
+    try {
+      const ok = await ask(initDataFor(USER, TOKEN));
+      assert.equal(ok.status, 200);
+      const { ticket } = (await ok.json()) as { ticket: string };
+      assert.deepEqual({ ...readTicket(ticket, TOKEN), exp: 0 }, { tgUserId: USER, staffId: editorId, candidateId: id, exp: 0 });
+      assert.equal((await ask(initDataFor(STRANGER, TOKEN))).status, 403, "a Telegram user no editor linked");
+      assert.equal((await ask(initDataFor(USER, "654321:another-bot"))).status, 401, "launch data from another bot");
+      assert.equal((await ask(initDataFor(USER, TOKEN), "cross-site")).status, 403, "a page on another site");
+    } finally {
+      if (saved === undefined) delete process.env.NEWSROOM_TELEGRAM_BOT_TOKEN;
+      else process.env.NEWSROOM_TELEGRAM_BOT_TOKEN = saved;
+    }
   });
 
   it("sends one card per new draft and ignores people who are not linked", async () => {
